@@ -65,7 +65,7 @@ export LAB_PASSWORD="${LAB_PASSWORD:-labpassword}"
 export LAB_DATABASE="${LAB_DATABASE:-labdb}"
 
 # ---- Crear directorios ----
-mkdir -p "$LOG_DIR" "$DATA_DIR"
+mkdir -p "$LOG_DIR" "$DATA_DIR" "/var/run/sql-engine-lab"
 
 # ---- Ejecutar script de inicialización del motor ----
 init_script="${ENGINES_DIR}/${ENGINE}/init.sh"

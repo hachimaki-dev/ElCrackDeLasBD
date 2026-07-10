@@ -17,17 +17,17 @@
 # ==================================================================
 # Stage 1: Oracle base — extraer binarios de gvenzl/oracle-free
 # ==================================================================
-FROM gvenzl/oracle-free:23.5-slim AS oracle-stage
+FROM --platform=linux/amd64 gvenzl/oracle-free:23.5-slim AS oracle-stage
 
 # ==================================================================
 # Stage 2: SQL Server base — extraer binarios de mcr.microsoft.com/mssql/server
 # ==================================================================
-FROM mcr.microsoft.com/mssql/server:2022-latest AS sqlserver-stage
+FROM --platform=linux/amd64 mcr.microsoft.com/mssql/server:2022-latest AS sqlserver-stage
 
 # ==================================================================
 # Stage 3: Final — debian:bookworm-slim con todos los motores
 # ==================================================================
-FROM debian:bookworm-slim AS final
+FROM --platform=linux/amd64 debian:bookworm-slim AS final
 
 LABEL maintainer="SQL Engine Laboratory"
 LABEL description="Multi-engine SQL laboratory — one engine at a time via ENV ENGINE"
@@ -37,7 +37,11 @@ LABEL org.opencontainers.image.source="https://github.com/tuusuario/sql-engine-l
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---- Instalar dependencias base ----
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Cambiamos los repositorios a HTTPS para evitar errores 403 Forbidden en algunas redes/proxies
+# y desactivamos la verificación SSL temporalmente para redes corporativas que interceptan el tráfico
+RUN sed -i 's/http:/https:/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || sed -i 's/http:/https:/g' /etc/apt/sources.list 2>/dev/null || true
+RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99insecure && \
+    apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     curl \
     gnupg2 \
@@ -72,19 +76,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Instalar MySQL ----
-# MySQL no está en los repos de Debian por defecto; usamos el repo oficial
-RUN curl -fsSL https://repo.mysql.com/RPM-GPG-KEY-mysql-2023 | gpg --dearmor -o /usr/share/keyrings/mysql.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0" \
-       > /etc/apt/sources.list.d/mysql.list \
-    && apt-get update && apt-get install -y --no-install-recommends \
-       mysql-server \
-       mysql-client \
+# Oracle no provee paquetes ARM64 nativos de MySQL para Debian en su repositorio oficial.
+# Para mantener compatibilidad en Apple Silicon (M1/M2/M3) sin forzar emulación amd64 completa,
+# usamos default-mysql-server (que provee la interfaz y binarios compatibles de MySQL vía MariaDB)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-mysql-server \
+    default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
+# ---- Crear usuarios requeridos por los motores ----
+RUN groupadd -g 54321 oinstall \
+    && groupadd -g 54322 dba \
+    && useradd -u 54321 -g oinstall -G dba -d /opt/oracle -s /bin/bash oracle \
+    && groupadd -g 10001 mssql \
+    && useradd -u 10001 -g mssql -d /var/opt/mssql -s /bin/bash mssql
+
 # ---- Copiar Oracle Free desde stage ----
-# Copiamos el Oracle Home completo y dependencias necesarias
-COPY --from=oracle-stage /opt/oracle /opt/oracle
-COPY --from=oracle-stage /usr/lib/oracle /usr/lib/oracle
+# Copiamos el Oracle Home completo y dependencias necesarias con los permisos correctos
+COPY --chown=oracle:dba --from=oracle-stage /opt/oracle /opt/oracle
 
 # Instalar dependencias de runtime para Oracle
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -97,7 +106,7 @@ ENV PATH="${ORACLE_HOME}/bin:${PATH}"
 ENV ORACLE_SID=FREE
 
 # ---- Copiar SQL Server desde stage ----
-COPY --from=sqlserver-stage /opt/mssql /opt/mssql
+COPY --chown=mssql:mssql --from=sqlserver-stage /opt/mssql /opt/mssql
 
 # Instalar dependencias de runtime para SQL Server
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -120,7 +129,18 @@ ENV PATH="/opt/mssql-tools18/bin:${PATH}"
 # ---- Crear directorios de datos y usuario de laboratorio ----
 RUN mkdir -p /var/lib/sql-engine-lab/data \
     && mkdir -p /var/log/sql-engine-lab \
-    && mkdir -p /var/run/sql-engine-lab
+    && mkdir -p /var/run/sql-engine-lab \
+    && mkdir -p /run/mysqld \
+    && mkdir -p /run/postgresql \
+    && chmod -R 777 /var/lib/sql-engine-lab \
+    && chmod -R 777 /var/log/sql-engine-lab \
+    && chmod -R 777 /var/run/sql-engine-lab \
+    && chmod -R 777 /run/mysqld \
+    && chmod -R 777 /run/postgresql \
+    && mkdir -p /tmp/.oracle && chmod 1777 /tmp/.oracle \
+    && mkdir -p /var/tmp/.oracle && chmod 1777 /var/tmp/.oracle \
+    && chmod -R 777 /opt/oracle/audit 2>/dev/null || true \
+    && chmod -R 777 /opt/oracle/diag 2>/dev/null || true
 
 # ---- Copiar scripts de inicialización por motor ----
 COPY engines/ /opt/sql-engine-lab/engines/

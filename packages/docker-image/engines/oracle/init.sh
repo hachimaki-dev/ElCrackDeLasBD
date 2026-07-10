@@ -18,8 +18,8 @@
 
 set -euo pipefail
 
-readonly ORACLE_DATA="/var/lib/sql-engine-lab/data/oracle"
 readonly ORACLE_HOME="/opt/oracle/product/23ai/dbhomeFree"
+readonly ORACLE_BASE="/opt/oracle"
 
 log_info() { echo "[ORACLE-INIT] INFO  $*"; }
 log_warn() { echo "[ORACLE-INIT] WARN  $*"; }
@@ -32,20 +32,26 @@ if ! id -u oracle &>/dev/null; then
 fi
 
 # ---- Crear directorios necesarios ----
-mkdir -p "$ORACLE_DATA"
 mkdir -p /opt/oracle/oradata
+mkdir -p /var/log/sql-engine-lab
 
-# ---- Verificar si Oracle ya está inicializado ----
-if [[ ! -f "$ORACLE_DATA/.initialized" ]]; then
-    log_info "Inicializando Oracle Free Database..."
-    log_warn "Este proceso puede tardar 1-2 minutos la primera vez."
-    
-    # Asegurar permisos
-    chown -R oracle:oinstall "$ORACLE_DATA"
-    chown -R oracle:oinstall /opt/oracle/oradata
-    
-    # Configurar el listener
-    cat > "$ORACLE_HOME/network/admin/listener.ora" << EOF
+# ---- Asegurar permisos ----
+chown -R oracle:oinstall /opt/oracle/oradata
+chown -R oracle:oinstall "$ORACLE_HOME" 2>/dev/null || true
+
+# ---- Verificar que los binarios de Oracle existan ----
+if [[ ! -f "$ORACLE_HOME/bin/sqlplus" ]]; then
+    log_warn "Los binarios de Oracle no se encontraron en $ORACLE_HOME/bin/"
+    log_warn "Esto puede ocurrir si la copia del stage falló."
+    log_warn "Listando contenido de /opt/oracle:"
+    ls -la /opt/oracle/ 2>/dev/null || true
+    ls -la "$ORACLE_HOME/bin/" 2>/dev/null || true
+    exit 1
+fi
+
+# ---- Configurar el listener ----
+mkdir -p "$ORACLE_HOME/network/admin"
+cat > "$ORACLE_HOME/network/admin/listener.ora" << EOF
 LISTENER =
   (DESCRIPTION_LIST =
     (DESCRIPTION =
@@ -55,8 +61,8 @@ LISTENER =
 
 DEFAULT_SERVICE_LISTENER = FREE
 EOF
-    
-    cat > "$ORACLE_HOME/network/admin/tnsnames.ora" << EOF
+
+cat > "$ORACLE_HOME/network/admin/tnsnames.ora" << EOF
 FREE =
   (DESCRIPTION =
     (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
@@ -75,54 +81,10 @@ FREEPDB1 =
     )
   )
 EOF
-    
-    chown oracle:oinstall "$ORACLE_HOME/network/admin/listener.ora"
-    chown oracle:oinstall "$ORACLE_HOME/network/admin/tnsnames.ora"
-    
-    # Arrancar Oracle temporalmente para crear usuario en el PDB
-    log_info "Arrancando Oracle para configuración inicial..."
-    
-    gosu oracle bash -c "
-        export ORACLE_HOME='$ORACLE_HOME'
-        export ORACLE_SID=FREE
-        export PATH='$ORACLE_HOME/bin:\$PATH'
-        
-        # Arrancar el listener
-        lsnrctl start
-        
-        # Arrancar la base de datos
-        sqlplus / as sysdba <<EOSQL
-            STARTUP;
-            ALTER PLUGGABLE DATABASE ALL OPEN;
-            
-            -- Crear usuario en FREEPDB1
-            ALTER SESSION SET CONTAINER = FREEPDB1;
-            CREATE USER ${LAB_USER} IDENTIFIED BY ${LAB_PASSWORD};
-            GRANT CONNECT, RESOURCE, CREATE TABLE, CREATE VIEW, CREATE SEQUENCE TO ${LAB_USER};
-            ALTER USER ${LAB_USER} QUOTA UNLIMITED ON USERS;
-            
-            EXIT;
-EOSQL
-    "
-    
-    # Detener Oracle
-    gosu oracle bash -c "
-        export ORACLE_HOME='$ORACLE_HOME'
-        export ORACLE_SID=FREE
-        export PATH='$ORACLE_HOME/bin:\$PATH'
-        
-        sqlplus / as sysdba <<EOSQL
-            SHUTDOWN IMMEDIATE;
-            EXIT;
-EOSQL
-        lsnrctl stop
-    "
-    
-    touch "$ORACLE_DATA/.initialized"
-    log_info "Oracle Free inicializado correctamente."
-    log_info "Usuario '${LAB_USER}' creado en PDB FREEPDB1."
-else
-    log_info "Oracle ya está inicializado. Saltando configuración inicial."
-fi
 
+chown oracle:oinstall "$ORACLE_HOME/network/admin/listener.ora"
+chown oracle:oinstall "$ORACLE_HOME/network/admin/tnsnames.ora"
+
+log_info "Oracle Free configurado."
+log_info "Nota: Oracle se arrancará via supervisord."
 log_info "Comando de conexión: sqlplus ${LAB_USER}/${LAB_PASSWORD}@localhost:1521/FREEPDB1"

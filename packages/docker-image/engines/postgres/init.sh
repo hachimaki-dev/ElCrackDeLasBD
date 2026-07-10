@@ -51,16 +51,17 @@ EOF
     # Arrancar temporalmente para crear usuario y BD
     gosu postgres "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_DATA/init.log" start
     
-    # Esperar a que PostgreSQL esté listo
+    # Esperar a que PostgreSQL esté listo (via socket local, no TCP)
     for i in $(seq 1 30); do
-        if gosu postgres "$PG_BIN/pg_isready" -h localhost -p 5432 &>/dev/null; then
+        if gosu postgres "$PG_BIN/pg_isready" -p 5432 &>/dev/null; then
             break
         fi
         sleep 1
     done
     
     # Crear usuario y base de datos del laboratorio
-    gosu postgres "$PG_BIN/psql" -h localhost -p 5432 <<-EOSQL
+    # Usamos socket local (sin -h) para que pg_hba.conf use "trust" en vez de "md5"
+    gosu postgres "$PG_BIN/psql" -p 5432 <<-EOSQL
         CREATE USER ${LAB_USER} WITH PASSWORD '${LAB_PASSWORD}' CREATEDB;
         CREATE DATABASE ${LAB_DATABASE} OWNER ${LAB_USER};
         GRANT ALL PRIVILEGES ON DATABASE ${LAB_DATABASE} TO ${LAB_USER};
