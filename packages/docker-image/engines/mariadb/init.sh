@@ -56,17 +56,21 @@ if [[ ! -d "$MARIADB_DATA" ]] || [[ ! -f "$MARIADB_DATA/mysql/user.frm" ]]; then
     done
     
     # Crear usuario y base de datos del laboratorio
-    mariadb -h 127.0.0.1 -P 3307 -u root --socket="$MARIADB_SOCKET" <<-EOSQL
+    mariadb -u root --socket="$MARIADB_SOCKET" <<-EOSQL
         CREATE DATABASE IF NOT EXISTS \`${LAB_DATABASE}\`;
         CREATE USER IF NOT EXISTS '${LAB_USER}'@'%' IDENTIFIED BY '${LAB_PASSWORD}';
         GRANT ALL PRIVILEGES ON \`${LAB_DATABASE}\`.* TO '${LAB_USER}'@'%';
+        CREATE USER IF NOT EXISTS '${LAB_USER}'@'localhost' IDENTIFIED BY '${LAB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON \`${LAB_DATABASE}\`.* TO '${LAB_USER}'@'localhost';
+        ALTER USER 'root'@'localhost' IDENTIFIED BY '${LAB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
         FLUSH PRIVILEGES;
 EOSQL
     
     log_info "Usuario '${LAB_USER}' y base de datos '${LAB_DATABASE}' creados."
     
     # Detener el servidor temporal
-    mariadb-admin -h 127.0.0.1 -P 3307 -u root --socket="$MARIADB_SOCKET" shutdown
+    mariadb-admin -u root --password="${LAB_PASSWORD}" --socket="$MARIADB_SOCKET" shutdown
     wait $MARIADB_PID 2>/dev/null || true
     
     log_info "MariaDB inicializado correctamente."

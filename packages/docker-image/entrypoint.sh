@@ -85,38 +85,38 @@ create_healthcheck() {
     
     case "$ENGINE" in
         postgres)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
-pg_isready -h localhost -p 5432 -U labuser -d labdb
+pg_isready -h localhost -p 5432 -U "${LAB_USER}" -d "${LAB_DATABASE}"
 EOF
             ;;
         mysql)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
-mysqladmin ping -h 127.0.0.1 -P 3306 -u labuser --password=labpassword
+mysqladmin ping -h 127.0.0.1 -P 3306 -u "${LAB_USER}" --password="${LAB_PASSWORD}"
 EOF
             ;;
         mariadb)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
-mariadb-admin ping -h 127.0.0.1 -P 3307 -u labuser --password=labpassword
+mariadb-admin ping -h 127.0.0.1 -P 3307 -u "${LAB_USER}" --password="${LAB_PASSWORD}"
 EOF
             ;;
         sqlite)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
 # SQLite siempre está "listo" si el archivo existe
-test -f /var/lib/sql-engine-lab/data/sqlite/labdb.sqlite
+test -f /var/lib/sql-engine-lab/data/sqlite/${LAB_DATABASE}.sqlite
 EOF
             ;;
         oracle)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
-echo "SELECT 1 FROM DUAL;" | sqlplus -s labuser/labpassword@localhost:1521/FREEPDB1
+echo "SELECT 1 FROM DUAL;" | sqlplus -s "${LAB_USER}"/"${LAB_PASSWORD}"@localhost:1521/FREEPDB1
 EOF
             ;;
         sqlserver)
-            cat > "$hc_script" << 'EOF'
+            cat > "$hc_script" << EOF
 #!/bin/bash
 /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "${LAB_PASSWORD}" -Q "SELECT 1" -C -b
 EOF
