@@ -1,0 +1,152 @@
+{
+  "name": "sql-engine-lab",
+  "displayName": "SQL Engine Laboratory",
+  "description": "Levanta motores SQL con un clic desde VS Code. PostgreSQL, MySQL, MariaDB, SQLite, Oracle y SQL Server listos para usar sin tocar Docker.",
+  "version": "0.1.0",
+  "publisher": "sqlenginelab",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "sql",
+    "database",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "sqlite",
+    "oracle",
+    "sqlserver",
+    "docker",
+    "laboratory"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "icon": "resources/icon.png",
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sql-engine-lab",
+          "title": "SQL Engine Lab",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "sql-engine-lab": [
+        {
+          "id": "sqlEngineLab.engineList",
+          "name": "Motores SQL",
+          "icon": "resources/icon.svg",
+          "contextualTitle": "SQL Engine Lab"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sqlEngineLab.startEngine",
+        "title": "Iniciar Motor",
+        "category": "SQL Engine Lab",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sqlEngineLab.stopEngine",
+        "title": "Detener Motor",
+        "category": "SQL Engine Lab",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sqlEngineLab.showConnectionInfo",
+        "title": "Ver Info de Conexión",
+        "category": "SQL Engine Lab",
+        "icon": "$(info)"
+      },
+      {
+        "command": "sqlEngineLab.copyConnectionCommand",
+        "title": "Copiar Comando de Conexión",
+        "category": "SQL Engine Lab",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "sqlEngineLab.refreshEngines",
+        "title": "Refrescar",
+        "category": "SQL Engine Lab",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sqlEngineLab.refreshEngines",
+          "when": "view == sqlEngineLab.engineList",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sqlEngineLab.startEngine",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-stopped",
+          "group": "inline"
+        },
+        {
+          "command": "sqlEngineLab.stopEngine",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-running",
+          "group": "inline"
+        },
+        {
+          "command": "sqlEngineLab.showConnectionInfo",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-running",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "package": "vsce package",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.31",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "mocha": "^10.2.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  }
+}

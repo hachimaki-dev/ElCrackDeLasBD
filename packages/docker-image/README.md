@@ -42,7 +42,7 @@ docker run -e ENGINE=sqlserver -p 1433:1433 sql-engine-lab:dev
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t tuusuario/sql-engine-lab:latest --push .
+  -t hachimakidev/sql-engine-lab:latest --push .
 ```
 
 ## Credenciales por defecto

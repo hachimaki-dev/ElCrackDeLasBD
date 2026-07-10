@@ -8,10 +8,10 @@
 #
 # Build multi-arquitectura:
 #   docker buildx build --platform linux/amd64,linux/arm64 \
-#     -t tuusuario/sql-engine-lab:latest --push .
+#     -t hachimakidev/sql-engine-lab:latest --push .
 #
 # Uso:
-#   docker run -e ENGINE=postgres -p 5432:5432 tuusuario/sql-engine-lab:latest
+#   docker run -e ENGINE=<motor> -p <puerto>:<puerto> hachimakidev/sql-engine-lab:latest
 ####################################################################
 
 # ==================================================================

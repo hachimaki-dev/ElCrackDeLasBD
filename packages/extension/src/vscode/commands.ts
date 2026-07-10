@@ -1,0 +1,256 @@
+/**
+ * SQL Engine Laboratory — VS Code Commands
+ *
+ * Registro y manejo de todos los comandos de la extensión.
+ * Cada acción de usuario es un comando independiente:
+ * - sqlEngineLab.startEngine
+ * - sqlEngineLab.stopEngine
+ * - sqlEngineLab.showConnectionInfo
+ * - sqlEngineLab.copyConnectionCommand
+ * - sqlEngineLab.refreshEngines
+ *
+ * Maneja errores de forma explícita y visible (no silenciosa).
+ */
+
+import * as vscode from 'vscode';
+import { EngineId, ConnectionInfo } from '../core/engines/engine.types';
+import { getAllEngines, getEngineById, isValidEngineId } from '../core/engines/registry';
+import { ContainerLifecycle } from '../core/docker/containerLifecycle';
+import { EngineTreeViewProvider } from './treeView';
+import { ConnectionPanel } from './connectionPanel';
+
+/**
+ * Registra todos los comandos de la extensión en el contexto de VS Code.
+ * Retorna un array de Disposables para cleanup al desactivar la extensión.
+ *
+ * @param context - Contexto de la extensión
+ * @param lifecycle - Instancia del gestor de ciclo de vida de contenedores
+ * @param treeProvider - Provider del Tree View para refrescar tras acciones
+ * @returns Array de Disposables para registrar en context.subscriptions
+ */
+export function registerCommands(
+  context: vscode.ExtensionContext,
+  lifecycle: ContainerLifecycle,
+  treeProvider: EngineTreeViewProvider,
+): vscode.Disposable[] {
+  // Guardar la última conexión activa para mostrarla en el panel
+  let activeConnectionInfo: ConnectionInfo | undefined;
+
+  // Escuchar cuando un motor arranca para guardar la info de conexión
+  lifecycle.on('engineStarted', (info: ConnectionInfo) => {
+    activeConnectionInfo = info;
+  });
+
+  lifecycle.on('engineStopped', () => {
+    activeConnectionInfo = undefined;
+    ConnectionPanel.dispose();
+  });
+
+  const disposables: vscode.Disposable[] = [
+    // ------------------------------------------------------------------
+    // Iniciar motor
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand(
+      'sqlEngineLab.startEngine',
+      async (engineIdOrItem?: EngineId | { engine: { id: EngineId } }) => {
+        const engineId = resolveEngineId(engineIdOrItem);
+
+        if (!engineId) {
+          // Llamado sin argumento (ej: desde la paleta de comandos) → pedir selección
+          const selected = await promptEngineSelection(lifecycle);
+          if (!selected) return;
+          void vscode.commands.executeCommand('sqlEngineLab.startEngine', selected);
+          return;
+        }
+
+        const engine = getEngineById(engineId);
+        if (!engine) {
+          void vscode.window.showErrorMessage(`Motor '${engineId}' no reconocido`);
+          return;
+        }
+
+        // Verificar si ya hay un motor activo
+        const currentEngine = lifecycle.getCurrentEngine();
+        if (currentEngine && currentEngine !== engineId) {
+          const currentEngineDef = getEngineById(currentEngine);
+          const answer = await vscode.window.showWarningMessage(
+            `${currentEngineDef?.displayName ?? currentEngine} está corriendo. ¿Detenerlo e iniciar ${engine.displayName}?`,
+            { modal: true },
+            'Sí, cambiar',
+          );
+          if (answer !== 'Sí, cambiar') return;
+        }
+
+        // Mostrar progreso en la barra de estado
+        void vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `SQL Engine Lab: Iniciando ${engine.displayName}`,
+            cancellable: false,
+          },
+          async (progress) => {
+            progress.report({ message: 'Verificando Docker...' });
+
+            lifecycle.on('statusChanged', (state) => {
+              if (state.message) {
+                progress.report({ message: state.message });
+              }
+            });
+
+            const result = await lifecycle.startEngine(engineId);
+
+            if (result.ok) {
+              activeConnectionInfo = result.value;
+              // Mostrar panel de conexión automáticamente
+              ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value);
+              void vscode.window.showInformationMessage(
+                `✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`,
+              );
+            } else {
+              showEngineError(result.error.message, result.error.code);
+            }
+          },
+        );
+      },
+    ),
+
+    // ------------------------------------------------------------------
+    // Detener motor
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.stopEngine', async () => {
+      const currentEngineId = lifecycle.getCurrentEngine();
+      if (!currentEngineId) {
+        void vscode.window.showInformationMessage('No hay ningún motor corriendo.');
+        return;
+      }
+
+      const engine = getEngineById(currentEngineId);
+      const answer = await vscode.window.showWarningMessage(
+        `¿Detener ${engine?.displayName ?? currentEngineId}?`,
+        { modal: true },
+        'Detener',
+      );
+
+      if (answer !== 'Detener') return;
+
+      void vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `SQL Engine Lab: Deteniendo ${engine?.displayName ?? currentEngineId}`,
+          cancellable: false,
+        },
+        async () => {
+          const result = await lifecycle.stopEngine();
+          if (result.ok) {
+            void vscode.window.showInformationMessage(
+              `✓ ${engine?.displayName ?? currentEngineId} detenido`,
+            );
+          } else {
+            showEngineError(result.error.message, result.error.code);
+          }
+        },
+      );
+    }),
+
+    // ------------------------------------------------------------------
+    // Mostrar info de conexión
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand(
+      'sqlEngineLab.showConnectionInfo',
+      (_engineIdOrItem?: EngineId) => {
+        const currentEngineId = lifecycle.getCurrentEngine();
+        if (!currentEngineId || !activeConnectionInfo) {
+          void vscode.window.showInformationMessage(
+            'No hay ningún motor corriendo. Inicia un motor primero.',
+          );
+          return;
+        }
+
+        const engine = getEngineById(currentEngineId);
+        if (!engine) return;
+
+        ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo);
+      },
+    ),
+
+    // ------------------------------------------------------------------
+    // Copiar comando de conexión
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.copyConnectionCommand', async () => {
+      if (!activeConnectionInfo) {
+        void vscode.window.showInformationMessage(
+          'No hay ningún motor corriendo. Inicia un motor primero.',
+        );
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(activeConnectionInfo.connectionCommand);
+      void vscode.window.showInformationMessage('✓ Comando de conexión copiado al portapapeles');
+    }),
+
+    // ------------------------------------------------------------------
+    // Refrescar Tree View
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.refreshEngines', () => {
+      treeProvider.refresh();
+    }),
+  ];
+
+  return disposables;
+}
+
+/**
+ * Muestra un QuickPick para seleccionar un motor cuando no se especificó uno.
+ */
+async function promptEngineSelection(
+  lifecycle: ContainerLifecycle,
+): Promise<EngineId | undefined> {
+  const currentEngineId = lifecycle.getCurrentEngine();
+  const engines = getAllEngines();
+
+  const items = engines.map((engine) => ({
+    label: engine.displayName,
+    description: engine.description,
+    detail:
+      currentEngineId === engine.id ? '● Actualmente corriendo' : undefined,
+    engineId: engine.id,
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Selecciona un motor SQL para iniciar',
+    title: 'SQL Engine Lab — Iniciar Motor',
+  });
+
+  return selected?.engineId;
+}
+
+/**
+ * Muestra un error con acción de "Abrir Docker Desktop" si el error es de Docker.
+ */
+function showEngineError(message: string, code: string): void {
+  if (code === 'DOCKER_NOT_RUNNING') {
+    void vscode.window
+      .showErrorMessage(`SQL Engine Lab: ${message}`, 'Abrir Docker Desktop')
+      .then((action) => {
+        if (action === 'Abrir Docker Desktop') {
+          void vscode.env.openExternal(
+            vscode.Uri.parse('https://www.docker.com/products/docker-desktop/'),
+          );
+        }
+      });
+  } else {
+    void vscode.window.showErrorMessage(`SQL Engine Lab: ${message}`);
+  }
+}
+
+/**
+ * Resuelve el engineId desde distintos tipos de argumento que puede recibir un comando.
+ */
+function resolveEngineId(
+  arg: EngineId | { engine: { id: EngineId } } | undefined,
+): EngineId | undefined {
+  if (!arg) return undefined;
+  if (typeof arg === 'string' && isValidEngineId(arg)) return arg;
+  if (typeof arg === 'object' && 'engine' in arg) return arg.engine.id;
+  return undefined;
+}
