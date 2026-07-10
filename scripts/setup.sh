@@ -37,7 +37,7 @@ CHECK_ONLY=false
 ISSUES=0
 
 pass()  { echo -e "  ${GREEN}✓${NC} $1"; }
-fail()  { echo -e "  ${RED}✗${NC} $1"; ((ISSUES++)); }
+fail()  { echo -e "  ${RED}✗${NC} $1"; ((ISSUES+=1)); }
 warn()  { echo -e "  ${YELLOW}⚠${NC} $1"; }
 info()  { echo -e "  ${DIM}→${NC} $1"; }
 section(){ echo ""; echo -e "${BOLD}${CYAN}▶ $1${NC}"; echo -e "${DIM}$(printf '%.0s─' {1..48})${NC}"; }

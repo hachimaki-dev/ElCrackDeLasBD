@@ -40,9 +40,9 @@ print_section() {
   echo -e "${DIM}$(printf '%.0s─' {1..48})${NC}"
 }
 
-print_pass()  { echo -e "  ${GREEN}✓${NC} $1"; ((PASS++)); }
-print_fail()  { echo -e "  ${RED}✗${NC} $1"; ((FAIL++)); }
-print_skip()  { echo -e "  ${YELLOW}⊘${NC} $1"; ((SKIP++)); }
+print_pass()  { echo -e "  ${GREEN}✓${NC} $1"; ((PASS+=1)); }
+print_fail()  { echo -e "  ${RED}✗${NC} $1"; ((FAIL+=1)); }
+print_skip()  { echo -e "  ${YELLOW}⊘${NC} $1"; ((SKIP+=1)); }
 print_info()  { echo -e "  ${DIM}→${NC} $1"; }
 print_detail(){ echo -e "    ${DIM}$1${NC}"; }
 

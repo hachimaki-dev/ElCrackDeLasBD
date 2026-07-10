@@ -231,6 +231,7 @@ export class DockerClient {
       }
 
       try {
+        // eslint-disable-next-line id-length
         await container.stop({ t: 10 });
       } catch {
         // Puede que ya esté detenido
