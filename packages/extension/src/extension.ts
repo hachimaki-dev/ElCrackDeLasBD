@@ -20,6 +20,11 @@ import { registerCommands } from './vscode/commands';
 import { VsCodeConfigurationProvider } from './vscode/configProvider';
 import { detectPlatform } from './core/docker/platformInfo';
 
+import { CredentialVault } from './core/credentials/vault';
+import { QueryRunner } from './core/runner/queryRunner';
+import { SheetManager } from './vscode/sheet/sheetManager';
+import { registerSheetCommands } from './vscode/sheet/sheetCommands';
+
 /**
  * Activación de la extensión.
  * VS Code llama a esta función cuando se activa la extensión
@@ -40,6 +45,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const dockerClient = new DockerClient();
   const configProvider = new VsCodeConfigurationProvider();
   const lifecycle = new ContainerLifecycle(dockerClient, configProvider);
+
+  // ---- Instancias de Hojas SQL ----
+  const vault = new CredentialVault(context.secrets, context.globalState);
+  const sheetManager = new SheetManager();
+  const queryRunner = new QueryRunner();
 
   // ---- Conectar eventos de diagnóstico al OutputChannel ----
   lifecycle.on('diagnosticLog', (message: string) => {
@@ -69,6 +79,13 @@ export function activate(context: vscode.ExtensionContext): void {
     outputChannel,
   );
 
+  const sheetDisposables = registerSheetCommands(
+    sheetManager,
+    vault,
+    queryRunner,
+    lifecycle
+  );
+
   // ---- Agregar todos los disposables al contexto ----
   // VS Code los limpiará automáticamente al desactivar la extensión
   context.subscriptions.push(
@@ -76,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
     treeProvider,
     outputChannel,
     ...commandDisposables,
+    ...sheetDisposables,
     // Disposable para lifecycle (detener contenedor activo al desactivar)
     new vscode.Disposable(() => {
       void lifecycle.stopEngine();

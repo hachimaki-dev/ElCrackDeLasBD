@@ -115,10 +115,16 @@ export class ConnectionPanel {
     const isSqlite = engine.id === 'sqlite';
 
     // ------------------------------------------------------------------------
-    // PANTALLA DE CARGA
+    // PANTALLA DE CARGA / ERROR
     // ------------------------------------------------------------------------
     if (!isReady) {
-      const speedNote = engine.startupSpeed === 'slow' 
+      const isError = this.currentStatus === 'error';
+      const titleText = isError ? `Error al iniciar ${this.escape(engine.displayName)}` : `Iniciando ${this.escape(engine.displayName)}...`;
+      const spinnerHtml = isError 
+        ? `<div style="font-size: 48px; margin-bottom: 16px;">❌</div>` 
+        : `<div class="loader"></div>`;
+        
+      const speedNote = (!isError && engine.startupSpeed === 'slow')
         ? `<div class="hint" style="margin-top: 16px;">⏱️ <b>Nota:</b> Este motor es pesado. Su primera inicialización puede tardar 1-2 minutos. Por favor, ten paciencia.</div>`
         : '';
         
@@ -127,20 +133,20 @@ export class ConnectionPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cargando ${this.escape(engine.displayName)}...</title>
+  <title>${isError ? 'Error' : 'Cargando'} ${this.escape(engine.displayName)}</title>
   <style>
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--vscode-editor-background); }
+    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--vscode-editor-background); text-align: center; }
     .loader { border: 4px solid var(--vscode-editor-inactiveSelectionBackground); border-top: 4px solid var(--vscode-button-background); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 24px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    h2 { font-weight: 500; margin-bottom: 8px; }
-    .status-msg { color: var(--vscode-descriptionForeground); font-size: 14px; }
+    h2 { font-weight: 500; margin-bottom: 12px; }
+    .status-msg { color: ${isError ? 'var(--vscode-errorForeground)' : 'var(--vscode-descriptionForeground)'}; font-size: 14px; max-width: 600px; line-height: 1.5; }
     .hint { color: var(--vscode-textPreformat-foreground); background: var(--vscode-textBlockQuote-background); padding: 12px; border-left: 4px solid var(--vscode-button-background); border-radius: 4px; max-width: 400px; text-align: center; }
   </style>
 </head>
 <body>
-  <div class="loader"></div>
-  <h2>Iniciando ${this.escape(engine.displayName)}...</h2>
-  <div class="status-msg">${this.escape(this.loadingMessage || 'Preparando contenedor...')}</div>
+  ${spinnerHtml}
+  <h2>${titleText}</h2>
+  <div class="status-msg">${this.escape(this.loadingMessage || (isError ? 'Error desconocido.' : 'Preparando contenedor...'))}</div>
   ${speedNote}
 </body>
 </html>`;

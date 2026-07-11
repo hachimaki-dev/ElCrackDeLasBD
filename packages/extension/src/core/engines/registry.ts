@@ -10,25 +10,19 @@
  * 3. No tocar nada más — el registry se encarga de exponerlo al sistema
  */
 
-import { EngineDefinition, EngineId } from './engine.types';
-import { postgresEngine } from './postgres.engine';
-import { mysqlEngine } from './mysql.engine';
-import { mariadbEngine } from './mariadb.engine';
-import { sqliteEngine } from './sqlite.engine';
-import { oracleEngine } from './oracle.engine';
-import { sqlserverEngine } from './sqlserver.engine';
+import { EngineDefinition, EngineId, LAB_CONTRACT } from './engine.types';
 
 /**
- * Catálogo completo de motores, en el orden en que se muestran en la UI.
- * El orden sigue la recomendación de PLAN.md §4: de más fácil a más difícil.
+ * Catálogo completo de motores, cargados desde la Bóveda de la Verdad (lab-contract.json).
+ * El orden de despliegue en la UI es dictado por este array.
  */
 const ALL_ENGINES: readonly EngineDefinition[] = [
-  sqliteEngine,
-  postgresEngine,
-  mariadbEngine,
-  mysqlEngine,
-  oracleEngine,
-  sqlserverEngine,
+  LAB_CONTRACT.engines.sqlite,
+  LAB_CONTRACT.engines.postgres,
+  LAB_CONTRACT.engines.mariadb,
+  LAB_CONTRACT.engines.mysql,
+  LAB_CONTRACT.engines.oracle,
+  LAB_CONTRACT.engines.sqlserver,
 ];
 
 /** Mapa indexado por EngineId para búsquedas O(1) */

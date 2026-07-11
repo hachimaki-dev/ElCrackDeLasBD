@@ -68,6 +68,7 @@ RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99insecure
     locales \
     gosu \
     procps \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Configurar locale ----
@@ -215,8 +216,9 @@ RUN chmod -R +x /opt/sql-engine-lab/engines/
 # ---- Copiar configuración de supervisord ----
 COPY supervisord.conf /etc/supervisor/conf.d/sql-engine-lab.conf
 
-# ---- Copiar entrypoint ----
+# ---- Copiar entrypoint y contrato maestro ----
 COPY entrypoint.sh /opt/sql-engine-lab/entrypoint.sh
+COPY lab-contract.json /opt/sql-engine-lab/lab-contract.json
 RUN chmod +x /opt/sql-engine-lab/entrypoint.sh
 
 # ---- Variables de entorno por defecto (pueden ser overrideadas) ----

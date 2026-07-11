@@ -115,6 +115,7 @@ export function registerCommands(
                 `✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`,
               );
             } else {
+              ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'error', `Error: ${result.error.message}`);
               showEngineError(result.error.message, result.error.code);
             }
           },

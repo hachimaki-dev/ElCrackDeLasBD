@@ -93,6 +93,24 @@
         "title": "Diagnóstico del Entorno (Doctor)",
         "category": "SQL Engine Lab",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "sqlEngineLab.newSqlSheet",
+        "title": "Nueva Hoja SQL",
+        "category": "SQL Engine Lab",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sqlEngineLab.runSql",
+        "title": "Ejecutar Query",
+        "category": "SQL Engine Lab",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sqlEngineLab.changeConnection",
+        "title": "Cambiar Conexión SQL",
+        "category": "SQL Engine Lab",
+        "icon": "$(plug)"
       }
     ],
     "menus": {
@@ -123,6 +141,18 @@
           "command": "sqlEngineLab.showConnectionInfo",
           "when": "view == sqlEngineLab.engineList && viewItem == engine-running",
           "group": "inline"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "sqlEngineLab.runSql",
+          "when": "resourceLangId == sql",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sqlEngineLab.changeConnection",
+          "when": "resourceLangId == sql",
+          "group": "navigation@2"
         }
       ]
     },

@@ -82,55 +82,35 @@ else
     log_info "Oracle Free: la inicialización se delega a runOracle.sh via supervisord."
 fi
 
+# ---- Extraer variables desde el contrato maestro ----
+CONTRACT_FILE="/opt/sql-engine-lab/lab-contract.json"
+if [[ -f "$CONTRACT_FILE" ]]; then
+    # Extraemos el comando de healthcheck del motor
+    HEALTHCHECK_CMD=$(jq -r ".engines.${ENGINE}.healthcheckCmd // empty" "$CONTRACT_FILE")
+    
+    if [[ -z "$HEALTHCHECK_CMD" ]]; then
+        log_error "No se encontró healthcheckCmd para el motor $ENGINE en el contrato."
+        exit 1
+    fi
+else
+    log_error "No se encontró el contrato maestro $CONTRACT_FILE."
+    exit 1
+fi
+
 # ---- Crear healthcheck específico del motor ----
 create_healthcheck() {
     local hc_script="/tmp/healthcheck.sh"
     
-    case "$ENGINE" in
-        postgres)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-pg_isready -h localhost -p 5432 -U "${LAB_USER}" -d "${LAB_DATABASE}"
-EOF
-            ;;
-        mysql)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-mysqladmin ping -h 127.0.0.1 -P 3306 -u "${LAB_USER}" --password="${LAB_PASSWORD}"
-EOF
-            ;;
-        mariadb)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-mariadb-admin ping -h 127.0.0.1 -P 3307 -u "${LAB_USER}" --password="${LAB_PASSWORD}"
-EOF
-            ;;
-        sqlite)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-# SQLite siempre está "listo" si el archivo existe
-test -f /var/lib/sql-engine-lab/data/sqlite/${LAB_DATABASE}.sqlite
-EOF
-            ;;
-        oracle)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-sqlplus -s /nolog << SQLEOF
-WHENEVER SQLERROR EXIT FAILURE;
-WHENEVER OSERROR EXIT FAILURE;
-CONNECT "${LAB_USER}"/"${LAB_PASSWORD}"@localhost:1521/FREEPDB1
-SELECT 1 FROM DUAL;
-EXIT;
-SQLEOF
-EOF
-            ;;
-        sqlserver)
-            cat > "$hc_script" << EOF
-#!/bin/bash
-/opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa -P "${LAB_PASSWORD}" -Q "SELECT 1" -C -b
-EOF
-            ;;
-    esac
+    # Escribimos el script. Observa que bash evaluará (expandirá) las variables
+    # de entorno como $LAB_USER al ejecutar jq o al hacer el echo -e, 
+    # pero queremos que se evalúen CUANDO el script corra.
+    # Como HEALTHCHECK_CMD contiene strings literales con '${LAB_USER}',
+    # simplemente podemos volcarlo al archivo y bash lo evaluará cuando
+    # Docker ejecute /tmp/healthcheck.sh.
+    
+    echo "#!/bin/bash" > "$hc_script"
+    # Usamos eval para expandir el comando recuperado del JSON que tiene variables como ${LAB_USER}
+    echo "eval \"$HEALTHCHECK_CMD\"" >> "$hc_script"
     
     chmod +x "$hc_script"
 }

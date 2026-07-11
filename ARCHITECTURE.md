@@ -64,7 +64,10 @@ graph TB
 
 ## Imagen Docker
 
-La imagen `sql-engine-lab` contiene los 6 motores SQL instalados, pero solo uno corre a la vez. La selección se hace via la variable de entorno `ENGINE`. Internamente usa `supervisord` con `autostart=false` en todos los programas.
+La imagen `sql-engine-lab` contiene 5 de los 6 motores SQL instalados (Postgres, MySQL, MariaDB, SQLite, SQL Server), pero solo uno corre a la vez. La selección se hace via la variable de entorno `ENGINE`. Internamente usa `supervisord` con `autostart=false` en todos los programas.
+
+> [!NOTE]
+> **Excepción de Arquitectura (ADR 0002):** El motor Oracle Free se ejecuta utilizando su imagen nativa (`gvenzl/oracle-free:23.5-slim`) directamente y un volumen persistente (`oracle-volume`), en lugar de la imagen unificada `sql-engine-lab`. Esto previene fallos fatales de inicialización del proceso en segundo plano (OFSD) causados por incompatibilidades con la base Debian.
 
 ```mermaid
 graph LR

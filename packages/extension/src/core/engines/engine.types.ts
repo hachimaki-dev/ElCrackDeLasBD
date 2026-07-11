@@ -214,7 +214,10 @@ export type EngineErrorCode =
   | 'HEALTHCHECK_TIMEOUT'
   | 'UNKNOWN_ENGINE'
   | 'WEAK_PASSWORD'
-  | 'CONTAINER_ERROR';
+  | 'CONTAINER_ERROR'
+  | 'QUERY_EXECUTION_FAILED'
+  | 'DOCKER_EXEC_FAILED'
+  | 'ENGINE_NOT_FOUND';
 
 /**
  * Error tipado del sistema de motores.
@@ -259,22 +262,40 @@ export interface PullProgress {
 // Docker Config
 // ==========================================================================
 
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Contrato maestro (Bóveda de la Verdad).
+ * Resolvemos la ruta considerando que el archivo compilado estará en out/core/engines/engine.types.js
+ * out -> extension -> packages -> root (4 niveles desde out, 5 niveles desde out/core/engines)
+ */
+const contractPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+let contractData: any;
+try {
+  contractData = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+} catch (e) {
+  // Fallback si corre desde un entorno donde __dirname es diferente (ej. webpack, ts-node)
+  // Intentamos buscarlo asumiendo que estamos en packages/extension/src/core/engines
+  const fallbackPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+  try {
+    contractData = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
+  } catch (e2) {
+    // Ultimo intento: buscarlo a un nivel superior si por casualidad estamos en root
+    contractData = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'lab-contract.json'), 'utf8'));
+  }
+}
+
+export const LAB_CONTRACT = contractData;
+
 /**
  * Configuración de la imagen Docker del laboratorio.
  */
 export const DOCKER_IMAGE_CONFIG = {
-  /** Nombre de la imagen en Docker Hub */
-  imageName: 'sql-engine-lab',
-  /** Tag de la imagen */
-  imageTag: 'dev',
-  /** Nombre del contenedor que crea la extensión */
-  containerName: 'sql-engine-lab',
-  /** Variables de entorno por defecto */
-  defaultEnv: {
-    LAB_USER: 'labuser',
-    LAB_PASSWORD: 'LabPassword123!',
-    LAB_DATABASE: 'labdb',
-  },
+  imageName: contractData.docker.imageName,
+  imageTag: contractData.docker.imageTag,
+  containerName: contractData.docker.containerName,
+  defaultEnv: contractData.defaultEnv,
 } as const;
 
 // ==========================================================================

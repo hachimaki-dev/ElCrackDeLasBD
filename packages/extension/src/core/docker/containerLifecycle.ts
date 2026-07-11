@@ -105,7 +105,9 @@ export class ContainerLifecycle extends EventEmitter {
     }
 
     // Pull de la imagen si no existe localmente
-    const fullImageName = `${DOCKER_IMAGE_CONFIG.imageName}:${DOCKER_IMAGE_CONFIG.imageTag}`;
+    const fullImageName = engineId === 'oracle' 
+      ? 'gvenzl/oracle-free:23.5-slim' 
+      : `${DOCKER_IMAGE_CONFIG.imageName}:${DOCKER_IMAGE_CONFIG.imageTag}`;
     const imageExists = await this.dockerClient.imageExists(fullImageName);
 
     if (!imageExists) {
@@ -137,41 +139,31 @@ export class ContainerLifecycle extends EventEmitter {
     const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
     const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
 
-    // Validar complejidad de contraseña para motores estrictos
-    if (engine.id === 'oracle' || engine.id === 'sqlserver') {
-      const pwd = envPassword;
-      const hasUpper = /[A-Z]/.test(pwd);
-      const hasLower = /[a-z]/.test(pwd);
-      const hasNumber = /[0-9]/.test(pwd);
-      const hasSymbol = /[^A-Za-z0-9]/.test(pwd);
-      
-      const complexityCount = [hasUpper, hasLower, hasNumber, hasSymbol].filter(Boolean).length;
-      
-      if (pwd.length < 8 || complexityCount < 3) {
-        return failure({
-          code: 'WEAK_PASSWORD',
-          message: `El motor ${engine.displayName} requiere una contraseña fuerte (mínimo 8 caracteres, conteniendo al menos 3 de: mayúsculas, minúsculas, números, símbolos). Por favor modifícala con el comando "Configurar Credenciales".`,
-        });
-      }
-    }
+    // Nota: La validación estricta de complejidad fue eliminada porque
+    // gvenzl/oracle-free acepta contraseñas simples en entornos de desarrollo local.
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       allocatedPort = engine.defaultPort === 0 ? 0 : engine.defaultPort + attempt;
       const portBindings = this.buildPortBindings(engine, allocatedPort);
       const exposedPorts = this.buildExposedPorts(engine);
 
+      const envVars: Record<string, string> = engine.id === 'oracle'
+        ? { ORACLE_PASSWORD: envPassword }
+        : {
+            ENGINE: engine.dockerEnvValue,
+            LAB_USER: envUser,
+            LAB_PASSWORD: envPassword,
+            LAB_DATABASE: envDatabase,
+          };
+
       startResult = await this.dockerClient.createAndStartContainer({
         name: DOCKER_IMAGE_CONFIG.containerName,
         image: fullImageName,
-        env: {
-          ENGINE: engine.dockerEnvValue,
-          LAB_USER: envUser,
-          LAB_PASSWORD: envPassword,
-          LAB_DATABASE: envDatabase,
-        },
+        env: envVars,
         portBindings,
         exposedPorts,
         shmSize: engine.dockerShmSize,
+        binds: engine.id === 'oracle' ? ['oracle-volume:/opt/oracle/oradata'] : [],
       });
 
       if (startResult.ok) {
@@ -201,6 +193,44 @@ export class ContainerLifecycle extends EventEmitter {
       // Limpiar el contenedor fallido
       await this.dockerClient.stopAndRemoveContainer(DOCKER_IMAGE_CONFIG.containerName);
       return failure(healthcheckResult.error);
+    }
+
+    // Configurar credenciales en tiempo de ejecución para Oracle
+    if (engine.id === 'oracle') {
+      this.updateStatus(engineId, 'starting', 'Configurando credenciales de Oracle...');
+      const resetResult = await this.dockerClient.execCommand(
+        DOCKER_IMAGE_CONFIG.containerName,
+        ['resetPassword', envPassword],
+        'oracle'
+      );
+      if (!resetResult.ok) {
+        this.emitLog(`Failed to reset SYS password: ${resetResult.error.message}`);
+      }
+
+      const setupScript = `WHENEVER SQLERROR CONTINUE;
+ALTER SESSION SET CONTAINER=FREEPDB1;
+BEGIN
+  EXECUTE IMMEDIATE 'DROP USER ${envUser} CASCADE';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -1918 THEN
+      RAISE;
+    END IF;
+END;
+/
+WHENEVER SQLERROR EXIT FAILURE;
+CREATE USER ${envUser} IDENTIFIED BY "${envPassword}";
+GRANT CONNECT, RESOURCE, DBA TO ${envUser};
+EXIT;
+`;
+      const setupResult = await this.dockerClient.execCommand(
+        DOCKER_IMAGE_CONFIG.containerName,
+        ['bash', '-c', `sqlplus -s / as sysdba << "EOF"\n${setupScript}\nEOF\n`],
+        'oracle'
+      );
+      if (!setupResult.ok) {
+        this.emitLog(`Failed to configure sandbox user: ${setupResult.error.message}`);
+      }
     }
 
     // Motor listo — generar info de conexión
@@ -311,15 +341,27 @@ export class ContainerLifecycle extends EventEmitter {
       }
 
       // Si no tiene healthcheck o no se pudo leer (ej. SQLite o iniciando),
-      // usamos un timeout mínimo de seguridad.
+      // usamos un timeout mínimo de seguridad o un check manual.
       if (healthStatus === null) {
-        const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
-        if (Date.now() - startTime >= minimumWaitMs) {
-          const stillRunning = await this.dockerClient.isContainerRunning(
+        if (engine.id === 'oracle') {
+          // Oracle 23ai Free nativo no tiene Docker Healthcheck, usamos su script interno
+          const hcResult = await this.dockerClient.execCommand(
             DOCKER_IMAGE_CONFIG.containerName,
+            ['/opt/oracle/healthcheck.sh'],
+            'oracle'
           );
-          if (stillRunning) {
+          if (hcResult.ok) {
             return success(undefined);
+          }
+        } else {
+          const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
+          if (Date.now() - startTime >= minimumWaitMs) {
+            const stillRunning = await this.dockerClient.isContainerRunning(
+              DOCKER_IMAGE_CONFIG.containerName,
+            );
+            if (stillRunning) {
+              return success(undefined);
+            }
           }
         }
       }
