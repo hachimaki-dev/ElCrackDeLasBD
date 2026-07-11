@@ -18,6 +18,7 @@ import {
   EngineState,
   EngineStatus,
   ConnectionInfo,
+  LaunchConfig,
   Result,
   EngineError,
   success,
@@ -57,9 +58,10 @@ export class ContainerLifecycle extends EventEmitter {
    * esperar healthcheck → emitir connectionInfo
    *
    * @param engineId - ID del motor a iniciar (debe estar registrado en el catálogo)
+   * @param launchConfig - Configuración opcional de credenciales personalizadas
    * @returns Result con la info de conexión si arrancó correctamente, o un error tipado
    */
-  async startEngine(engineId: EngineId): Promise<Result<ConnectionInfo>> {
+  async startEngine(engineId: EngineId, launchConfig?: LaunchConfig): Promise<Result<ConnectionInfo>> {
     // Buscar definición del motor
     const engine = getEngineById(engineId);
     if (!engine) {
@@ -112,6 +114,11 @@ export class ContainerLifecycle extends EventEmitter {
     // Crear y arrancar contenedor
     this.updateStatus(engineId, 'starting', `Iniciando ${engine.displayName}...`);
 
+    // Resolver credenciales: launchConfig > template defaults > config defaults
+    const resolvedUser = launchConfig?.user || engine.connectionTemplate.defaultUser || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
+    const resolvedPassword = launchConfig?.password || engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
+    const resolvedDatabase = launchConfig?.database || engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
+
     const portBindings = this.buildPortBindings(engine);
     const exposedPorts = this.buildExposedPorts(engine);
 
@@ -120,14 +127,13 @@ export class ContainerLifecycle extends EventEmitter {
       image: fullImageName,
       env: {
         ENGINE: engine.dockerEnvValue,
-        LAB_USER: engine.connectionTemplate.defaultUser || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER,
-        LAB_PASSWORD:
-          engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,
-        LAB_DATABASE:
-          engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE,
+        LAB_USER: resolvedUser,
+        LAB_PASSWORD: resolvedPassword,
+        LAB_DATABASE: resolvedDatabase,
       },
       portBindings,
       exposedPorts,
+      shmSize: 1073741824, // 1GB de SHM (Crítico para que Oracle 23c Free funcione)
     });
 
     if (!startResult.ok) {
@@ -155,7 +161,7 @@ export class ContainerLifecycle extends EventEmitter {
     const connectionDetails = buildConnectionDetails(engine, {
       host: 'localhost',
       port: engine.defaultPort,
-    });
+    }, launchConfig);
 
     const connectionInfo: ConnectionInfo = {
       ...connectionDetails,

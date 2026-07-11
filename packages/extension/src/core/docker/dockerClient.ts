@@ -171,6 +171,7 @@ export class DockerClient {
     env: Record<string, string>;
     portBindings: Record<string, Array<{ HostPort: string }>>;
     exposedPorts: Record<string, Record<string, never>>;
+    shmSize?: number;
   }): Promise<Result<Dockerode.Container>> {
     try {
       // Remover contenedor anterior si existe
@@ -186,14 +187,19 @@ export class DockerClient {
 
       const envArray = Object.entries(options.env).map(([key, value]) => `${key}=${value}`);
 
+      const hostConfig: Dockerode.HostConfig = {
+        PortBindings: options.portBindings,
+      };
+      if (options.shmSize) {
+        hostConfig.ShmSize = options.shmSize;
+      }
+
       const container = await this.docker.createContainer({
         name: options.name,
         Image: options.image,
         Env: envArray,
         ExposedPorts: options.exposedPorts,
-        HostConfig: {
-          PortBindings: options.portBindings,
-        },
+        HostConfig: hostConfig,
       });
 
       await container.start();

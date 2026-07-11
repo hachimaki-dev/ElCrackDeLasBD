@@ -43,18 +43,21 @@ suite('ContainerLifecycle', () => {
   test('getStatus inicial es "stopped"', () => {
     const mock = createSuccessfulDockerMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
     assert.strictEqual(lifecycle.getStatus(), 'stopped');
   });
 
   test('getCurrentEngine inicial es null', () => {
     const mock = createSuccessfulDockerMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
     assert.strictEqual(lifecycle.getCurrentEngine(), null);
   });
 
   test('startEngine con motor inválido retorna error UNKNOWN_ENGINE', async () => {
     const mock = createSuccessfulDockerMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
 
     const result = await lifecycle.startEngine('nonexistent' as never);
     assert.strictEqual(result.ok, false);
@@ -66,6 +69,7 @@ suite('ContainerLifecycle', () => {
   test('startEngine falla si Docker no está corriendo', async () => {
     const mock = createDockerNotRunningMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
 
     const result = await lifecycle.startEngine('postgres');
     assert.strictEqual(result.ok, false);
@@ -77,6 +81,7 @@ suite('ContainerLifecycle', () => {
   test('stopEngine cuando no hay motor activo retorna success', async () => {
     const mock = createSuccessfulDockerMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
 
     const result = await lifecycle.stopEngine();
     assert.strictEqual(result.ok, true);
@@ -85,6 +90,7 @@ suite('ContainerLifecycle', () => {
   test('emite evento statusChanged durante el ciclo de vida', async () => {
     const mock = createSuccessfulDockerMock();
     const lifecycle = new ContainerLifecycle(mock);
+    lifecycle.on('error', () => {});
 
     const statusChanges: string[] = [];
     lifecycle.on('statusChanged', (state: EngineState) => {
@@ -94,6 +100,7 @@ suite('ContainerLifecycle', () => {
     // Solo verificamos que Docker not running emite el estado 'error'
     const notRunningMock = createDockerNotRunningMock();
     const lifecycle2 = new ContainerLifecycle(notRunningMock);
+    lifecycle2.on('error', () => {});
     lifecycle2.on('statusChanged', (state: EngineState) => {
       statusChanges.push(state.status);
     });

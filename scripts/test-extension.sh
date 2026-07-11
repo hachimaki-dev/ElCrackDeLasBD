@@ -147,6 +147,7 @@ test_files=(
   "test/core/registry.test.ts"
   "test/core/connectionBuilder.test.ts"
   "test/core/containerLifecycle.test.ts"
+  "test/core/cheatSheets.test.ts"
 )
 
 # Compilar tests también
@@ -233,6 +234,7 @@ if [[ -d "/tmp/sel_test_out" ]]; then
       node --require /tmp/sel_test_out/src/core/engines/engine.types.js \
       "$EXTENSION_DIR/node_modules/.bin/mocha" \
       --require "$EXTENSION_DIR/node_modules/ts-node/register" \
+      --ui tdd \
       "$EXTENSION_DIR/$test_file" \
       --reporter spec 2>&1) || test_exit=$?
     

@@ -12,8 +12,8 @@ suite('ConnectionBuilder', () => {
     assert.ok(engine);
 
     const command = buildConnectionCommand(engine, { host: 'localhost', port: 5432 });
-    assert.ok(command.startsWith('psql'), 'Debe comenzar con psql');
-    assert.ok(command.includes('localhost'), 'Debe incluir el host');
+    assert.ok(command.startsWith('docker exec -it sql-engine-lab psql'), 'Debe comenzar con docker exec -it sql-engine-lab psql');
+    assert.ok(command.includes('127.0.0.1'), 'Debe incluir el host local interno (127.0.0.1)');
     assert.ok(command.includes('5432'), 'Debe incluir el puerto');
     assert.ok(command.includes('labuser'), 'Debe incluir el usuario');
     assert.ok(command.includes('labdb'), 'Debe incluir la base de datos');
@@ -24,7 +24,8 @@ suite('ConnectionBuilder', () => {
     assert.ok(engine);
 
     const command = buildConnectionCommand(engine, { host: 'localhost', port: 3306 });
-    assert.ok(command.startsWith('mysql'), 'Debe comenzar con mysql');
+    assert.ok(command.startsWith('docker exec -it sql-engine-lab mysql'), 'Debe comenzar con docker exec -it sql-engine-lab mysql');
+    assert.ok(command.includes('127.0.0.1'), 'Debe incluir 127.0.0.1 para forzar TCP');
     assert.ok(command.includes('3306'), 'Debe incluir el puerto');
   });
 
@@ -33,7 +34,7 @@ suite('ConnectionBuilder', () => {
     assert.ok(engine);
 
     const command = buildConnectionCommand(engine, { host: 'localhost', port: 0 });
-    assert.ok(command.startsWith('sqlite3'), 'Debe comenzar con sqlite3');
+    assert.ok(command.startsWith('docker exec -it sql-engine-lab sqlite3'), 'Debe comenzar con docker exec -it sql-engine-lab sqlite3');
     assert.ok(command.includes('labdb'), 'Debe incluir el nombre de la BD');
   });
 
@@ -42,9 +43,10 @@ suite('ConnectionBuilder', () => {
     assert.ok(engine);
 
     const command = buildConnectionCommand(engine, { host: 'localhost', port: 1521 });
-    assert.ok(command.startsWith('sqlplus'), 'Debe comenzar con sqlplus');
+    assert.ok(command.startsWith('docker exec -it sql-engine-lab sqlplus'), 'Debe comenzar con docker exec -it sql-engine-lab sqlplus');
     assert.ok(command.includes('1521'), 'Debe incluir el puerto');
     assert.ok(command.includes('FREEPDB1'), 'Debe incluir el PDB');
+    assert.ok(command.includes('127.0.0.1'), 'Debe incluir 127.0.0.1');
   });
 
   test('SQL Server: buildConnectionCommand usa formato -S host,port', () => {
@@ -52,11 +54,12 @@ suite('ConnectionBuilder', () => {
     assert.ok(engine);
 
     const command = buildConnectionCommand(engine, { host: 'localhost', port: 1433 });
-    assert.ok(command.startsWith('sqlcmd'), 'Debe comenzar con sqlcmd');
+    assert.ok(command.startsWith('docker exec -it sql-engine-lab sqlcmd'), 'Debe comenzar con docker exec -it sql-engine-lab sqlcmd');
     assert.ok(command.includes('1433'), 'Debe incluir el puerto');
+    assert.ok(command.includes('127.0.0.1'), 'Debe incluir 127.0.0.1');
   });
 
-  test('buildConnectionDetails retorna todos los campos de conexión', () => {
+  test('buildConnectionDetails retorna todos los campos de conexión (defaults)', () => {
     const engine = getEngineById('postgres');
     assert.ok(engine);
 
@@ -66,6 +69,17 @@ suite('ConnectionBuilder', () => {
     assert.strictEqual(details.user, 'labuser');
     assert.strictEqual(details.password, 'labpassword');
     assert.strictEqual(details.database, 'labdb');
+  });
+
+  test('buildConnectionDetails respeta launchConfig personalizado', () => {
+    const engine = getEngineById('postgres');
+    assert.ok(engine);
+
+    const launchConfig = { user: 'admin', password: 'password123', database: 'proddb' };
+    const details = buildConnectionDetails(engine, { host: 'localhost', port: 5432 }, launchConfig);
+    assert.strictEqual(details.user, 'admin');
+    assert.strictEqual(details.password, 'password123');
+    assert.strictEqual(details.database, 'proddb');
   });
 
   test('los placeholders se resuelven correctamente', () => {

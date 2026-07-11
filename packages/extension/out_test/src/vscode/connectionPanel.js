@@ -1,3 +1,4 @@
+"use strict";
 /**
  * SQL Engine Laboratory — Connection Panel Webview
  *
@@ -9,103 +10,108 @@
  *
  * El panel se muestra automáticamente cuando un motor arranca exitosamente.
  */
-
-import * as vscode from 'vscode';
-import { ConnectionInfo, EngineDefinition } from '../core/engines/engine.types';
-import { getCheatSheet } from '../core/connection/cheatSheets';
-
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ConnectionPanel = void 0;
+const vscode = __importStar(require("vscode"));
+const cheatSheets_1 = require("../core/connection/cheatSheets");
 /**
  * Panel Webview que muestra información de conexión de un motor SQL activo.
  * Solo puede existir una instancia a la vez (singleton por sesión de extensión).
  */
-export class ConnectionPanel {
-  private static currentPanel: ConnectionPanel | undefined;
-
-  private readonly panel: vscode.WebviewPanel;
-
-  private constructor(
-    panel: vscode.WebviewPanel,
-    _extensionUri: vscode.Uri,
-    engine: EngineDefinition,
-    connectionInfo: ConnectionInfo,
-  ) {
-    this.panel = panel;
-
-    // Renderizar el contenido inicial
-    this.update(engine, connectionInfo);
-
-    // Manejar mensajes del Webview (botón copiar)
-    this.panel.webview.onDidReceiveMessage(async (message: { command: string; text: string }) => {
-      if (message.command === 'copy') {
-        await vscode.env.clipboard.writeText(message.text);
-        void vscode.window.showInformationMessage('✓ Comando copiado al portapapeles');
-      }
-    });
-
-    // Limpiar cuando se cierra el panel
-    this.panel.onDidDispose(() => {
-      ConnectionPanel.currentPanel = undefined;
-    });
-  }
-
-  /**
-   * Crea o revela el panel de conexión.
-   * Si ya existe, lo actualiza con los nuevos datos.
-   *
-   * @param extensionUri - URI de la extensión para resolución de recursos
-   * @param engine - Definición del motor activo
-   * @param connectionInfo - Datos de conexión del motor
-   */
-  static createOrReveal(
-    extensionUri: vscode.Uri,
-    engine: EngineDefinition,
-    connectionInfo: ConnectionInfo,
-  ): void {
-    const column = vscode.window.activeTextEditor
-      ? vscode.window.activeTextEditor.viewColumn
-      : vscode.ViewColumn.One;
-
-    if (ConnectionPanel.currentPanel) {
-      ConnectionPanel.currentPanel.panel.reveal(column);
-      ConnectionPanel.currentPanel.update(engine, connectionInfo);
-      return;
+class ConnectionPanel {
+    static currentPanel;
+    panel;
+    constructor(panel, _extensionUri, engine, connectionInfo) {
+        this.panel = panel;
+        // Renderizar el contenido inicial
+        this.update(engine, connectionInfo);
+        // Manejar mensajes del Webview (botón copiar)
+        this.panel.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'copy') {
+                await vscode.env.clipboard.writeText(message.text);
+                void vscode.window.showInformationMessage('✓ Comando copiado al portapapeles');
+            }
+        });
+        // Limpiar cuando se cierra el panel
+        this.panel.onDidDispose(() => {
+            ConnectionPanel.currentPanel = undefined;
+        });
     }
-
-    const panel = vscode.window.createWebviewPanel(
-      'sqlEngineLabConnection',
-      `SQL Lab — ${engine.displayName}`,
-      column ?? vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      },
-    );
-
-    ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo);
-  }
-
-  /**
-   * Cierra el panel si está abierto.
-   */
-  static dispose(): void {
-    if (ConnectionPanel.currentPanel) {
-      ConnectionPanel.currentPanel.panel.dispose();
-      ConnectionPanel.currentPanel = undefined;
+    /**
+     * Crea o revela el panel de conexión.
+     * Si ya existe, lo actualiza con los nuevos datos.
+     *
+     * @param extensionUri - URI de la extensión para resolución de recursos
+     * @param engine - Definición del motor activo
+     * @param connectionInfo - Datos de conexión del motor
+     */
+    static createOrReveal(extensionUri, engine, connectionInfo) {
+        const column = vscode.window.activeTextEditor
+            ? vscode.window.activeTextEditor.viewColumn
+            : vscode.ViewColumn.One;
+        if (ConnectionPanel.currentPanel) {
+            ConnectionPanel.currentPanel.panel.reveal(column);
+            ConnectionPanel.currentPanel.update(engine, connectionInfo);
+            return;
+        }
+        const panel = vscode.window.createWebviewPanel('sqlEngineLabConnection', `SQL Lab — ${engine.displayName}`, column ?? vscode.ViewColumn.One, {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+        });
+        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo);
     }
-  }
-
-  private update(engine: EngineDefinition, connectionInfo: ConnectionInfo): void {
-    this.panel.title = `SQL Lab — ${engine.displayName}`;
-    this.panel.webview.html = this.buildHtml(engine, connectionInfo);
-  }
-
-  private buildHtml(engine: EngineDefinition, info: ConnectionInfo): string {
-    const isSqlite = engine.id === 'sqlite';
-    const cheatSheet = getCheatSheet(engine.id);
-
-    const credentialsRows = isSqlite
-      ? ''
-      : `
+    /**
+     * Cierra el panel si está abierto.
+     */
+    static dispose() {
+        if (ConnectionPanel.currentPanel) {
+            ConnectionPanel.currentPanel.panel.dispose();
+            ConnectionPanel.currentPanel = undefined;
+        }
+    }
+    update(engine, connectionInfo) {
+        this.panel.title = `SQL Lab — ${engine.displayName}`;
+        this.panel.webview.html = this.buildHtml(engine, connectionInfo);
+    }
+    buildHtml(engine, info) {
+        const isSqlite = engine.id === 'sqlite';
+        const cheatSheet = (0, cheatSheets_1.getCheatSheet)(engine.id);
+        const credentialsRows = isSqlite
+            ? ''
+            : `
         <tr>
           <td class="label">Usuario</td>
           <td class="value"><code>${this.escape(info.user)}</code></td>
@@ -119,10 +125,9 @@ export class ConnectionPanel {
           <td class="value"><code>${this.escape(info.database)}</code></td>
         </tr>
       `;
-
-    const hostPortRow = isSqlite
-      ? ''
-      : `
+        const hostPortRow = isSqlite
+            ? ''
+            : `
         <tr>
           <td class="label">Host</td>
           <td class="value"><code>${this.escape(info.host)}</code></td>
@@ -132,36 +137,30 @@ export class ConnectionPanel {
           <td class="value"><code>${info.port}</code></td>
         </tr>
       `;
-
-    // Build cheat sheet HTML
-    const tipsHtml = cheatSheet.tips
-      .map((tip) => `<li>${this.escape(tip)}</li>`)
-      .join('\n');
-
-    const sectionsHtml = cheatSheet.sections
-      .map((section) => {
-        const itemsHtml = section.items
-          .map(
-            (item) => `
+        // Build cheat sheet HTML
+        const tipsHtml = cheatSheet.tips
+            .map((tip) => `<li>${this.escape(tip)}</li>`)
+            .join('\n');
+        const sectionsHtml = cheatSheet.sections
+            .map((section) => {
+            const itemsHtml = section.items
+                .map((item) => `
             <div class="cheat-item">
               <div class="cheat-label">${this.escape(item.label)}</div>
               <pre class="cheat-code"><code>${this.escape(item.sql)}</code></pre>
               <button class="copy-sql-btn" onclick="copySql(this)" data-sql="${this.escapeAttr(item.sql)}">📋 Copiar</button>
             </div>
-          `,
-          )
-          .join('\n');
-
-        return `
+          `)
+                .join('\n');
+            return `
           <div class="cheat-section">
             <div class="cheat-section-title">${this.escape(section.title)}</div>
             ${itemsHtml}
           </div>
         `;
-      })
-      .join('\n');
-
-    return /* html */ `<!DOCTYPE html>
+        })
+            .join('\n');
+        return /* html */ `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -490,23 +489,23 @@ export class ConnectionPanel {
   </script>
 </body>
 </html>`;
-  }
-
-  private escape(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  private escapeAttr(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-      .replace(/\n/g, '&#10;');
-  }
+    }
+    escape(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    escapeAttr(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/\n/g, '&#10;');
+    }
 }
+exports.ConnectionPanel = ConnectionPanel;
+//# sourceMappingURL=connectionPanel.js.map
