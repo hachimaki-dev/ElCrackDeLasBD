@@ -38,6 +38,7 @@ export function registerCommands(
   treeProvider: EngineTreeViewProvider,
   dockerClient: DockerClient,
   outputChannel: vscode.OutputChannel,
+  progressManager: import('../core/progress/progressManager').ProgressManager
 ): vscode.Disposable[] {
   // Guardar la última conexión activa para mostrarla en el panel
   let activeConnectionInfo: ConnectionInfo | undefined;
@@ -109,8 +110,8 @@ export function registerCommands(
 
             if (result.ok) {
               activeConnectionInfo = result.value;
-              // Mostrar panel de conexión automáticamente
-              ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value);
+              // Mostrar panel de conexión automáticamente con progreso actual
+              ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value, undefined, progressManager.getCompletedModules(engineId));
               void vscode.window.showInformationMessage(
                 `✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`,
               );
@@ -178,8 +179,28 @@ export function registerCommands(
         const engine = getEngineById(currentEngineId);
         if (!engine) return;
 
-        ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo);
+        ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
       },
+    ),
+
+    // ------------------------------------------------------------------
+    // Completar Módulo de Tutorial
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand(
+      'sqlEngineLab.completeTutorial',
+      async (moduleId: string) => {
+        const currentEngineId = lifecycle.getCurrentEngine();
+        if (!currentEngineId) return;
+
+        await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
+        
+        // Refrescar el estado del panel
+        const engine = getEngineById(currentEngineId);
+        if (engine && activeConnectionInfo) {
+          ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
+          void vscode.window.showInformationMessage(`¡Felicidades! Completaste el módulo ${moduleId}.`);
+        }
+      }
     ),
 
     // ------------------------------------------------------------------

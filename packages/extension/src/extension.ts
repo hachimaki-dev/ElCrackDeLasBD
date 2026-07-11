@@ -19,11 +19,11 @@ import { EngineTreeViewProvider } from './vscode/treeView';
 import { registerCommands } from './vscode/commands';
 import { VsCodeConfigurationProvider } from './vscode/configProvider';
 import { detectPlatform } from './core/docker/platformInfo';
-
 import { CredentialVault } from './core/credentials/vault';
 import { QueryRunner } from './core/runner/queryRunner';
 import { SheetManager } from './vscode/sheet/sheetManager';
 import { registerSheetCommands } from './vscode/sheet/sheetCommands';
+import { ProgressManager } from './core/progress/progressManager';
 
 /**
  * Activación de la extensión.
@@ -50,6 +50,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const vault = new CredentialVault(context.secrets, context.globalState);
   const sheetManager = new SheetManager();
   const queryRunner = new QueryRunner();
+  const progressManager = new ProgressManager(context.globalState);
 
   // ---- Conectar eventos de diagnóstico al OutputChannel ----
   lifecycle.on('diagnosticLog', (message: string) => {
@@ -77,9 +78,11 @@ export function activate(context: vscode.ExtensionContext): void {
     treeProvider,
     dockerClient,
     outputChannel,
+    progressManager
   );
 
   const sheetDisposables = registerSheetCommands(
+    context,
     sheetManager,
     vault,
     queryRunner,

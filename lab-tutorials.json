@@ -1,0 +1,176 @@
+{
+  "postgres": {
+    "1-1": {
+      "engine": "postgres",
+      "level": "Nivel 1",
+      "title": "Tipos y Estructuras Fundamentales",
+      "description": "Domina la creación de tablas con tipos nativos potentes de Postgres como SERIAL, UUID y arrays.",
+      "content": "-- ==========================================\n-- MÓDULO 1-1: Tipos y Estructuras\n-- ==========================================\n-- Postgres ofrece tipos de datos muy avanzados en comparación al estándar.\n\nCREATE TABLE pilotos (\n    id SERIAL PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    creditos NUMERIC(10,2) DEFAULT 0.00,\n    es_rebelde BOOLEAN DEFAULT FALSE,\n    habilidades TEXT[] -- Array nativo de Postgres\n);\n\n-- RETO: Modifica la tabla para añadir una columna 'fecha_registro'\n-- que tenga por defecto la fecha y hora actual (CURRENT_TIMESTAMP).\n-- Escribe tu código abajo y ejecútalo:"
+    },
+    "1-2": {
+      "engine": "postgres",
+      "level": "Nivel 1",
+      "title": "DDL y Constraints",
+      "description": "Protege la integridad de los datos usando constraints UNIQUE, CHECK y ALTER TABLE.",
+      "content": "-- ==========================================\n-- MÓDULO 1-2: Restricciones (Constraints)\n-- ==========================================\n-- Agreguemos una restricción para asegurar que los créditos nunca sean negativos.\n\nALTER TABLE pilotos ADD CONSTRAINT chk_creditos CHECK (creditos >= 0);\n\n-- RETO: Haz que la columna 'nombre' sea única en toda la galaxia.\n-- PISTA: ALTER TABLE pilotos ADD CONSTRAINT nombre_unico UNIQUE (nombre);\n-- ¡Inténtalo!"
+    },
+    "1-3": {
+      "engine": "postgres",
+      "level": "Nivel 1",
+      "title": "Manipulación de Datos (DML)",
+      "description": "Inserta y consulta datos complejos, incluyendo el uso de Arrays en Postgres.",
+      "content": "-- ==========================================\n-- MÓDULO 1-3: Insertando Datos\n-- ==========================================\n\nINSERT INTO pilotos (nombre, creditos, es_rebelde, habilidades)\nVALUES \n('Luke Skywalker', 1500.50, TRUE, ARRAY['Vuelo', 'Fuerza', 'Mecánica']),\n('Han Solo', 50000.00, TRUE, ARRAY['Contrabando', 'Puntería']);\n\n-- RETO: Escribe un SELECT para encontrar a los pilotos rebeldes\n-- que tengan más de 2000 créditos."
+    },
+    "2-1": {
+      "engine": "postgres",
+      "level": "Nivel 2",
+      "title": "Relaciones y Joins",
+      "description": "Cruza información entre tablas usando llaves foráneas y diferentes tipos de JOINs.",
+      "content": "-- ==========================================\n-- MÓDULO 2-1: Relaciones Galácticas\n-- ==========================================\n\nCREATE TABLE naves (\n    id SERIAL PRIMARY KEY,\n    modelo VARCHAR(50),\n    piloto_id INTEGER REFERENCES pilotos(id)\n);\n\nINSERT INTO naves (modelo, piloto_id) VALUES ('X-Wing', 1), ('Halcón Milenario', 2), ('TIE Fighter', NULL);\n\n-- RETO: Escribe un LEFT JOIN entre pilotos y naves para ver \n-- quién tiene nave y quién no, y qué nave no tiene piloto asignado."
+    },
+    "2-2": {
+      "engine": "postgres",
+      "level": "Nivel 2",
+      "title": "El poder de JSONB",
+      "description": "Postgres es increíble manejando datos semi-estructurados con su tipo JSONB.",
+      "content": "-- ==========================================\n-- MÓDULO 2-2: JSONB\n-- ==========================================\n\nALTER TABLE naves ADD COLUMN especificaciones JSONB;\n\nUPDATE naves \nSET especificaciones = '{\"velocidad_max\": 1050, \"hiperimpulsor\": true}'::jsonb \nWHERE modelo = 'Halcón Milenario';\n\n-- RETO: Selecciona el modelo de la nave y su velocidad_max extrayendo\n-- el valor del JSONB (Usa el operador ->>)."
+    },
+    "2-3": {
+      "engine": "postgres",
+      "level": "Nivel 2",
+      "title": "Vistas y CTEs",
+      "description": "Simplifica consultas complejas usando Common Table Expressions y Vistas.",
+      "content": "-- ==========================================\n-- MÓDULO 2-3: Vistas y CTEs (WITH)\n-- ==========================================\n\nCREATE VIEW vista_rebeldes_ricos AS\nSELECT nombre, creditos FROM pilotos WHERE es_rebelde = TRUE AND creditos > 1000;\n\n-- RETO: Crea una consulta usando WITH (CTE) que primero filtre las naves \n-- con hiperimpulsor desde el JSONB, y luego haga JOIN con los pilotos."
+    },
+    "3-1": {
+      "engine": "postgres",
+      "level": "Nivel 3",
+      "title": "Triggers y Auditoría",
+      "description": "Automatiza acciones en la base de datos disparando funciones PL/pgSQL ante eventos.",
+      "content": "-- ==========================================\n-- MÓDULO 3-1: Triggers\n-- ==========================================\n\nCREATE OR REPLACE FUNCTION auditar_creditos()\nRETURNS TRIGGER AS $$\nBEGIN\n    IF NEW.creditos < OLD.creditos THEN\n        RAISE NOTICE '¡Alerta! Piloto % perdió créditos.', NEW.nombre;\n    END IF;\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\n-- RETO: Crea un TRIGGER llamado 'trg_auditar_creditos'\n-- que se ejecute BEFORE UPDATE en la tabla pilotos\n-- e invoque la función auditar_creditos()."
+    },
+    "3-2": {
+      "engine": "postgres",
+      "level": "Nivel 3",
+      "title": "Funciones y Stored Procedures",
+      "description": "Escribe lógica de negocio compleja directamente en el motor con PL/pgSQL.",
+      "content": "-- ==========================================\n-- MÓDULO 3-2: Funciones (PL/pgSQL)\n-- ==========================================\n\nCREATE OR REPLACE FUNCTION pagar_recompensa(p_id INTEGER, monto NUMERIC)\nRETURNS VOID AS $$\nBEGIN\n    UPDATE pilotos SET creditos = creditos + monto WHERE id = p_id;\n    IF NOT FOUND THEN\n        RAISE EXCEPTION 'Piloto % no encontrado', p_id;\n    END IF;\nEND;\n$$ LANGUAGE plpgsql;\n\n-- RETO: Llama a la función usando SELECT o PERFORM para \n-- darle 5000 créditos al piloto con ID 1."
+    },
+    "3-3": {
+      "engine": "postgres",
+      "level": "Nivel 3",
+      "title": "Extensiones: PostGIS y pgcrypto",
+      "description": "Descubre cómo las extensiones de Postgres lo convierten en el motor más versátil.",
+      "content": "-- ==========================================\n-- MÓDULO 3-3: Extensiones\n-- ==========================================\n-- Postgres permite instalar módulos. Usaremos pgcrypto para encriptar datos.\n\nCREATE EXTENSION IF NOT EXISTS pgcrypto;\n\n-- RETO: Escribe un SELECT que use la función crypt('mi_password', gen_salt('bf'))\n-- para generar un hash seguro de contraseña."
+    }
+  },
+  "sqlite": {
+    "1-1": {
+      "engine": "sqlite",
+      "level": "Nivel 1",
+      "title": "Dynamic Typing",
+      "description": "SQLite es flexible. Aprende a crear tablas y usar tipos dinámicos.",
+      "content": "-- ==========================================\n-- MÓDULO 1-1: SQLite Basics\n-- ==========================================\n-- En SQLite los tipos son afinidades. Puedes guardar texto en un INTEGER.\n\nCREATE TABLE bases (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    nombre TEXT,\n    capacidad INT\n);\n\n-- RETO: Crea una tabla 'armas' con id (INTEGER PRIMARY KEY) y tipo (TEXT)."
+    },
+    "1-2": {
+      "engine": "sqlite",
+      "level": "Nivel 1",
+      "title": "DDL Restringido",
+      "description": "Conoce las limitaciones de ALTER TABLE en SQLite y cómo evadirlas.",
+      "content": "-- ==========================================\n-- MÓDULO 1-2: ALTER TABLE Limitado\n-- ==========================================\n-- SQLite solo permite ADD COLUMN y RENAME COLUMN. No puedes hacer DROP COLUMN directamente.\n\nALTER TABLE bases ADD COLUMN escudo_activo INTEGER DEFAULT 1;\n\n-- RETO: Renombra la tabla 'bases' a 'bases_rebeldes' usando ALTER TABLE RENAME TO."
+    },
+    "1-3": {
+      "engine": "sqlite",
+      "level": "Nivel 1",
+      "title": "DML Básico",
+      "description": "Inserta y recupera datos en tu base local.",
+      "content": "-- ==========================================\n-- MÓDULO 1-3: INSERT y SELECT\n-- ==========================================\n\nINSERT INTO bases_rebeldes (nombre, capacidad) VALUES ('Base Echo', 5000);\n\n-- RETO: Inserta otra base llamada 'Yavin 4' con capacidad 10000 \n-- y luego haz un SELECT de todas las bases."
+    },
+    "2-1": {
+      "engine": "sqlite",
+      "level": "Nivel 2",
+      "title": "FTS5: Búsqueda Rápida",
+      "description": "Usa el motor de búsqueda Full-Text-Search integrado de SQLite.",
+      "content": "-- ==========================================\n-- MÓDULO 2-1: FTS5\n-- ==========================================\n\nCREATE VIRTUAL TABLE archivos USING fts5(titulo, contenido);\nINSERT INTO archivos VALUES ('Planos de la Estrella', 'El punto débil es el puerto de escape térmico.');\n\n-- RETO: Realiza una búsqueda MATCH en la tabla virtual 'archivos'\n-- para buscar la palabra 'térmico'."
+    },
+    "2-2": {
+      "engine": "sqlite",
+      "level": "Nivel 2",
+      "title": "Funciones JSON",
+      "description": "Manipula datos JSON en SQLite usando la extensión JSON1 nativa.",
+      "content": "-- ==========================================\n-- MÓDULO 2-2: JSON en SQLite\n-- ==========================================\n\nCREATE TABLE droides (id INTEGER PRIMARY KEY, datos TEXT);\nINSERT INTO droides (datos) VALUES ('{\"modelo\": \"R2-D2\", \"color\": \"Azul\"}');\n\n-- RETO: Usa json_extract() o el operador ->> para seleccionar solo \n-- el modelo de los droides desde la columna de texto JSON."
+    },
+    "2-3": {
+      "engine": "sqlite",
+      "level": "Nivel 2",
+      "title": "Vistas y Relaciones",
+      "description": "Usa FOREIGN KEYS y Vistas para estructurar tu DB portátil.",
+      "content": "-- ==========================================\n-- MÓDULO 2-3: Foreign Keys\n-- ==========================================\n-- ¡Ojo! En SQLite, el soporte FK viene desactivado por defecto en algunas conexiones.\nPRAGMA foreign_keys = ON;\n\n-- RETO: Crea una vista 'vista_droides_modelos' que extraiga el modelo del JSON \n-- usando json_extract() de la tabla droides."
+    },
+    "3-1": {
+      "engine": "sqlite",
+      "level": "Nivel 3",
+      "title": "Triggers",
+      "description": "Los triggers en SQLite te permiten emular lógicas complejas y constraints que faltan.",
+      "content": "-- ==========================================\n-- MÓDULO 3-1: Triggers\n-- ==========================================\n\nCREATE TRIGGER prevent_delete_bases BEFORE DELETE ON bases_rebeldes \nBEGIN \n  SELECT RAISE(ABORT, '¡No puedes borrar una base rebelde!'); \nEND;\n\n-- RETO: Intenta ejecutar un DELETE FROM bases_rebeldes y mira el error."
+    },
+    "3-2": {
+      "engine": "sqlite",
+      "level": "Nivel 3",
+      "title": "Common Table Expressions",
+      "description": "Genera secuencias y recorre árboles con WITH RECURSIVE.",
+      "content": "-- ==========================================\n-- MÓDULO 3-2: CTEs Recursivos\n-- ==========================================\n-- Muy útil para generar números al vuelo sin tablas.\n\nWITH RECURSIVE cnt(x) AS (\n  SELECT 1 \n  UNION ALL \n  SELECT x+1 FROM cnt WHERE x<5\n)\nSELECT x FROM cnt;\n\n-- RETO: Modifica el CTE para generar la tabla de multiplicar del 7 \n-- (7, 14, 21...) hasta el 70."
+    },
+    "3-3": {
+      "engine": "sqlite",
+      "level": "Nivel 3",
+      "title": "Pragmas y Optimización",
+      "description": "Domina la configuración interna del archivo SQLite con PRAGMA.",
+      "content": "-- ==========================================\n-- MÓDULO 3-3: PRAGMA\n-- ==========================================\n\nPRAGMA table_info('bases_rebeldes'); -- Muestra la estructura de la tabla.\n\n-- RETO: Ejecuta PRAGMA journal_mode; para ver el modo de registro actual de la base de datos."
+    }
+  },
+  "mysql": {
+    "1-1": { "engine": "mysql", "level": "Nivel 1", "title": "Sintaxis Básica MySQL", "description": "Tipos básicos y AUTO_INCREMENT en MySQL.", "content": "-- Módulo 1-1\nCREATE TABLE siths (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100));\n-- RETO: Inserta a 'Darth Vader' y 'Darth Maul'." },
+    "1-2": { "engine": "mysql", "level": "Nivel 1", "title": "Alteraciones DDL", "description": "Uso de ALTER TABLE.", "content": "-- Módulo 1-2\nALTER TABLE siths ADD COLUMN maestro VARCHAR(100);\n-- RETO: Añade una columna 'nivel_maldad' de tipo INT." },
+    "1-3": { "engine": "mysql", "level": "Nivel 1", "title": "Filtros y DML", "description": "Uso de WHERE, LIMIT y LIKE.", "content": "-- Módulo 1-3\nSELECT * FROM siths WHERE nombre LIKE 'Darth%';\n-- RETO: Escribe una consulta que limite los resultados a 1 registro usando LIMIT." },
+    "2-1": { "engine": "mysql", "level": "Nivel 2", "title": "Índices", "description": "Mejora el rendimiento con índices.", "content": "-- Módulo 2-1\nCREATE INDEX idx_nombre ON siths(nombre);\n-- RETO: Explica el plan de ejecución usando EXPLAIN SELECT * FROM siths WHERE nombre = 'Vader';" },
+    "2-2": { "engine": "mysql", "level": "Nivel 2", "title": "Group By y Funciones", "description": "Agrupaciones en MySQL.", "content": "-- Módulo 2-2\nSELECT count(*), maestro FROM siths GROUP BY maestro;\n-- RETO: Usa HAVING count(*) > 1 para filtrar maestros con varios aprendices." },
+    "2-3": { "engine": "mysql", "level": "Nivel 2", "title": "Variables de Usuario", "description": "Guarda estados temporales por sesión.", "content": "-- Módulo 2-3\nSET @poder := 9000;\nSELECT @poder;\n-- RETO: Incrementa la variable en 1000 y vuélvela a imprimir." },
+    "3-1": { "engine": "mysql", "level": "Nivel 3", "title": "Triggers en MySQL", "description": "Automatización con NEW y OLD.", "content": "-- Módulo 3-1\nCREATE TRIGGER trg_sith_insert BEFORE INSERT ON siths FOR EACH ROW SET NEW.nombre = UPPER(NEW.nombre);\n-- RETO: Inserta un registro en minúsculas y verifica que se haya convertido a mayúsculas." },
+    "3-2": { "engine": "mysql", "level": "Nivel 3", "title": "Stored Procedures", "description": "DELIMITER y bloques lógicos.", "content": "-- Módulo 3-2\nDELIMITER //\nCREATE PROCEDURE count_siths(OUT total INT)\nBEGIN\n SELECT COUNT(*) INTO total FROM siths;\nEND //\nDELIMITER ;\n-- RETO: Llama al procedimiento CALL count_siths(@total); y luego SELECT @total;" },
+    "3-3": { "engine": "mysql", "level": "Nivel 3", "title": "Motores InnoDB", "description": "Explora transacciones.", "content": "-- Módulo 3-3\nSTART TRANSACTION;\nINSERT INTO siths (nombre) VALUES ('Kylo Ren');\nROLLBACK;\n-- RETO: Verifica que Kylo Ren no se guardó." }
+  },
+  "mariadb": {
+    "1-1": { "engine": "mariadb", "level": "Nivel 1", "title": "MariaDB vs MySQL", "description": "Descubre las similitudes.", "content": "-- Módulo 1-1\nCREATE TABLE clones (id INT AUTO_INCREMENT PRIMARY KEY, lote VARCHAR(10));\n-- RETO: Crea otra columna para el estado del chip inhibidor." },
+    "1-2": { "engine": "mariadb", "level": "Nivel 1", "title": "Restricciones", "description": "Claves únicas y foráneas.", "content": "-- Módulo 1-2\nALTER TABLE clones ADD UNIQUE (lote);\n-- RETO: Intenta insertar dos clones con el mismo lote para provocar un error." },
+    "1-3": { "engine": "mariadb", "level": "Nivel 1", "title": "Update y Replace", "description": "Comando REPLACE nativo.", "content": "-- Módulo 1-3\nREPLACE INTO clones (id, lote) VALUES (1, 'Bad Batch');\n-- RETO: Investiga qué hace REPLACE INTO si el ID ya existe." },
+    "2-1": { "engine": "mariadb", "level": "Nivel 2", "title": "Secuencias", "description": "Secuencias nativas introducidas en MariaDB 10.3.", "content": "-- Módulo 2-1\nCREATE SEQUENCE seq_batalla START WITH 1 INCREMENT BY 1;\nSELECT NEXTVAL(seq_batalla);\n-- RETO: Selecciona el siguiente valor de la secuencia de nuevo." },
+    "2-2": { "engine": "mariadb", "level": "Nivel 2", "title": "Full Text Index", "description": "Búsquedas avanzadas de texto.", "content": "-- Módulo 2-2\nALTER TABLE clones ADD FULLTEXT(lote);\n-- RETO: Haz un SELECT usando MATCH() AGAINST()." },
+    "2-3": { "engine": "mariadb", "level": "Nivel 2", "title": "Window Functions", "description": "OVER() y RANK().", "content": "-- Módulo 2-3\n-- MariaDB soporta window functions como ROW_NUMBER().\n-- RETO: Selecciona todos los clones enumerándolos con ROW_NUMBER() OVER(ORDER BY id)." },
+    "3-1": { "engine": "mariadb", "level": "Nivel 3", "title": "System Versioning", "description": "Tablas temporales nativas de MariaDB.", "content": "-- Módulo 3-1\nCREATE TABLE jedi_log (nombre VARCHAR(50)) WITH SYSTEM VERSIONING;\n-- RETO: Inserta un dato, bórralo, y fíltralo con FOR SYSTEM_TIME AS OF." },
+    "3-2": { "engine": "mariadb", "level": "Nivel 3", "title": "Stored Functions", "description": "Creación de funciones determinísticas.", "content": "-- Módulo 3-2\nDELIMITER //\nCREATE FUNCTION holonet(msg VARCHAR(100)) RETURNS VARCHAR(200) DETERMINISTIC\nBEGIN\n RETURN CONCAT('HoloNet: ', msg);\nEND //\nDELIMITER ;\n-- RETO: Llama a SELECT holonet('Victoria!');" },
+    "3-3": { "engine": "mariadb", "level": "Nivel 3", "title": "Roles y Seguridad", "description": "Gestión moderna de permisos.", "content": "-- Módulo 3-3\nCREATE ROLE comandante;\nGRANT SELECT ON labdb.* TO comandante;\n-- RETO: Asigna el rol a un usuario (si tuvieras permisos de root)." }
+  },
+  "oracle": {
+    "1-1": { "engine": "oracle", "level": "Nivel 1", "title": "Tipos de Oracle", "description": "VARCHAR2 y NUMBER.", "content": "-- Módulo 1-1\nCREATE TABLE sables (id NUMBER GENERATED BY DEFAULT AS IDENTITY, color VARCHAR2(20));\n-- RETO: Oracle usa VARCHAR2 en lugar de VARCHAR. Inserta un sable 'Verde'." },
+    "1-2": { "engine": "oracle", "level": "Nivel 1", "title": "Constraints", "description": "Nombramiento estricto.", "content": "-- Módulo 1-2\nALTER TABLE sables ADD CONSTRAINT chk_color CHECK (color IN ('Rojo', 'Verde', 'Azul', 'Morado'));\n-- RETO: Intenta insertar un sable de color 'Amarillo'." },
+    "1-3": { "engine": "oracle", "level": "Nivel 1", "title": "Transacciones Explícitas", "description": "En Oracle NO hay autocommit por defecto.", "content": "-- Módulo 1-3\nINSERT INTO sables (color) VALUES ('Morado');\nCOMMIT;\n-- RETO: Escribe un UPDATE y luego haz un ROLLBACK; para cancelar los cambios." },
+    "2-1": { "engine": "oracle", "level": "Nivel 2", "title": "La tabla DUAL", "description": "Tabla mágica de un solo registro.", "content": "-- Módulo 2-1\nSELECT SYSDATE FROM DUAL;\n-- RETO: Selecciona 2+2 FROM DUAL para ver cómo funciona como calculadora." },
+    "2-2": { "engine": "oracle", "level": "Nivel 2", "title": "Joins y (+) (obsoleto)", "description": "Cómo identificar código viejo.", "content": "-- Módulo 2-2\n-- Antes de ANSI SQL, Oracle usaba (+) para los OUTER JOINS.\n-- RETO: Usa el formato moderno LEFT JOIN entre sables y otra tabla (créala si quieres)." },
+    "2-3": { "engine": "oracle", "level": "Nivel 2", "title": "RowID y Rownum", "description": "Pseudocolumnas de paginación.", "content": "-- Módulo 2-3\nSELECT ROWNUM, color FROM sables WHERE ROWNUM <= 2;\n-- RETO: Ejecuta SELECT ROWID, color FROM sables para ver las direcciones físicas." },
+    "3-1": { "engine": "oracle", "level": "Nivel 3", "title": "PL/SQL Bloques Anónimos", "description": "La base de la programación en Oracle.", "content": "-- Módulo 3-1\nBEGIN\n  DBMS_OUTPUT.PUT_LINE('¡Hola, Coruscant!');\nEND;\n/\n-- RETO: Declara una variable en la sección DECLARE y muéstrala." },
+    "3-2": { "engine": "oracle", "level": "Nivel 3", "title": "Excepciones en PL/SQL", "description": "Manejo de errores.", "content": "-- Módulo 3-2\nDECLARE\n v_color VARCHAR2(20);\nBEGIN\n SELECT color INTO v_color FROM sables WHERE id = 999;\nEXCEPTION\n WHEN NO_DATA_FOUND THEN DBMS_OUTPUT.PUT_LINE('No hay sable con ese ID.');\nEND;\n/" },
+    "3-3": { "engine": "oracle", "level": "Nivel 3", "title": "Paquetes PL/SQL", "description": "Agrupación de funciones.", "content": "-- Módulo 3-3\nCREATE OR REPLACE PACKAGE pkg_sables AS \n PROCEDURE forjar(p_color VARCHAR2);\nEND pkg_sables;\n/\n-- RETO: Crea el PACKAGE BODY correspondiente." }
+  },
+  "sqlserver": {
+    "1-1": { "engine": "sqlserver", "level": "Nivel 1", "title": "Identity e Instancias", "description": "Cómo funciona IDENTITY en T-SQL.", "content": "-- Módulo 1-1\nCREATE TABLE cazarrecompensas (id INT IDENTITY(1,1) PRIMARY KEY, nombre NVARCHAR(100));\n-- RETO: En SQL Server se usa NVARCHAR para Unicode. Inserta a 'Boba Fett'." },
+    "1-2": { "engine": "sqlserver", "level": "Nivel 1", "title": "Esquemas y DDL", "description": "Esquemas (dbo).", "content": "-- Módulo 1-2\nALTER TABLE dbo.cazarrecompensas ADD nave NVARCHAR(50);\n-- RETO: Crea un SCHEMA nuevo llamado 'gremio' y transfiere la tabla allí (ALTER SCHEMA)." },
+    "1-3": { "engine": "sqlserver", "level": "Nivel 1", "title": "GO y Lotes", "description": "El separador de lotes de SSMS.", "content": "-- Módulo 1-3\nPRINT 'Lote 1'\nGO\nPRINT 'Lote 2'\nGO\n-- RETO: Inserta un cazarrecompensas y usa GO para enviar el comando." },
+    "2-1": { "engine": "sqlserver", "level": "Nivel 2", "title": "Clustered Indexes", "description": "Arquitectura física en SQL Server.", "content": "-- Módulo 2-1\n-- La PK ya es Clustered por defecto. Vamos a crear uno Non-Clustered.\nCREATE NONCLUSTERED INDEX idx_nave ON cazarrecompensas(nave);\n-- RETO: Crea otro índice sobre la columna nombre." },
+    "2-2": { "engine": "sqlserver", "level": "Nivel 2", "title": "TOP vs LIMIT", "description": "Sintaxis de T-SQL para límites.", "content": "-- Módulo 2-2\nSELECT TOP 1 * FROM cazarrecompensas;\n-- RETO: Selecciona el TOP 50 PERCENT de los registros." },
+    "2-3": { "engine": "sqlserver", "level": "Nivel 2", "title": "OUTPUT Clause", "description": "Evita tener que consultar después de insertar.", "content": "-- Módulo 2-3\nINSERT INTO cazarrecompensas (nombre, nave)\nOUTPUT inserted.id, inserted.nombre\nVALUES ('Mandaloriano', 'Razor Crest');\n-- RETO: Usa OUTPUT deleted.* en una sentencia DELETE." },
+    "3-1": { "engine": "sqlserver", "level": "Nivel 3", "title": "Transacciones TRY..CATCH", "description": "Manejo de errores avanzado.", "content": "-- Módulo 3-1\nBEGIN TRY\n  SELECT 1/0;\nEND TRY\nBEGIN CATCH\n  PRINT 'Error: ' + ERROR_MESSAGE();\nEND CATCH;\n-- RETO: Envuelve un INSERT que falle (ej. duplicando una llave) en un TRY..CATCH." },
+    "3-2": { "engine": "sqlserver", "level": "Nivel 3", "title": "TVF (Table-Valued Functions)", "description": "Funciones que devuelven tablas.", "content": "-- Módulo 3-2\nCREATE FUNCTION dbo.GetBounties()\nRETURNS TABLE\nAS\nRETURN (SELECT * FROM cazarrecompensas);\nGO\n-- RETO: Haz un SELECT * FROM dbo.GetBounties();" },
+    "3-3": { "engine": "sqlserver", "level": "Nivel 3", "title": "SQL Server Agent (Simulado)", "description": "Automatización.", "content": "-- Módulo 3-3\n-- En SQL Server se usan Jobs (Agente). En código puro, se usa WAITFOR.\nWAITFOR DELAY '00:00:05';\nPRINT 'Han pasado 5 segundos';\n-- RETO: Usa WAITFOR TIME '23:00:00' (¡cuidado con bloquear la sesión!)." }
+  }
+}

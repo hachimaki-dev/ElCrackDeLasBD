@@ -14,8 +14,11 @@ import { QueryRunner } from '../../core/runner/queryRunner';
 import { ContainerLifecycle } from '../../core/docker/containerLifecycle';
 import { getEngineById } from '../../core/engines/registry';
 import { EngineId } from '../../core/engines/engine.types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export function registerSheetCommands(
+  context: vscode.ExtensionContext,
   sheetManager: SheetManager,
   vault: CredentialVault,
   runner: QueryRunner,
@@ -134,6 +137,85 @@ export function registerSheetCommands(
           }
         }
       );
+    }),
+
+    // ------------------------------------------------------------------
+    // Abrir Hoja de Tutorial
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.openTutorialSheet', async (moduleId: string) => {
+      const currentEngineId = lifecycle.getCurrentEngine();
+      if (!currentEngineId) {
+        void vscode.window.showErrorMessage('Inicia un motor SQL primero para ver sus tutoriales.');
+        return;
+      }
+
+      // Leer lab-tutorials.json
+      let tutorialsData: any = null;
+      
+      // Intentar primero en el workspace (útil para desarrollo)
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        const wsPath = path.join(workspaceFolders[0].uri.fsPath, 'lab-tutorials.json');
+        if (fs.existsSync(wsPath)) {
+          try {
+            tutorialsData = JSON.parse(fs.readFileSync(wsPath, 'utf8'));
+          } catch (e) {
+            console.error("Error reading workspace lab-tutorials", e);
+          }
+        }
+      }
+
+      // Si no está en el workspace, intentar resolver usando el extensionPath (garantizado que existe)
+      if (!tutorialsData) {
+        try {
+          // Si estamos en desarrollo, context.extensionPath es /packages/extension
+          // Si empaquetamos lab-tutorials, deberíamos moverlo a resources/ o similar, 
+          // pero por ahora buscamos 2 niveles arriba.
+          let tutorialsPath = path.join(context.extensionPath, '..', '..', 'lab-tutorials.json');
+          if (!fs.existsSync(tutorialsPath)) {
+            // Intento alternativo (si estuviera en root de extension)
+            tutorialsPath = path.join(context.extensionPath, 'lab-tutorials.json');
+          }
+          
+          if (fs.existsSync(tutorialsPath)) {
+             tutorialsData = JSON.parse(fs.readFileSync(tutorialsPath, 'utf8'));
+          } else {
+             throw new Error(`File not found at ${tutorialsPath}`);
+          }
+        } catch (err: any) {
+          void vscode.window.showErrorMessage(`No se pudo cargar lab-tutorials.json: ${err.message}`);
+          return;
+        }
+      }
+
+      const engineTutorials = tutorialsData[currentEngineId];
+      if (!engineTutorials || !engineTutorials[moduleId]) {
+        void vscode.window.showErrorMessage(`Tutorial '${moduleId}' no encontrado para el motor ${currentEngineId}`);
+        return;
+      }
+
+      const tutorial = engineTutorials[moduleId];
+
+      // 1. Abrir documento
+      const document = await vscode.workspace.openTextDocument({
+        language: 'sql',
+        content: `-- ${tutorial.title}\n-- ${tutorial.description}\n\n${tutorial.content}\n`,
+      });
+      await vscode.window.showTextDocument(document);
+
+      // 2. Asociar conexión en modo sandbox (mockeando el quickpick o forzándolo)
+      // Como configureConnectionForSheet usa QuickPick, para tutorial lo ideal es saltárselo y forzar sandbox.
+      const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+      const sandboxProfile: ConnectionProfile = {
+        id: `sandbox-${currentEngineId}-${Date.now()}`,
+        name: 'Sandbox',
+        engineId: currentEngineId,
+        user: config.get<string>('labUser', 'labuser'),
+        database: config.get<string>('labDatabase', 'labdb'),
+        password: config.get<string>('labPassword', 'LabPassword123!')
+      };
+      sheetManager.bindSheetToConnection(document.uri, sandboxProfile);
+      vscode.window.showInformationMessage(`Tutorial '${tutorial.title}' abierto y conectado al Sandbox.`);
     }),
   ];
 
