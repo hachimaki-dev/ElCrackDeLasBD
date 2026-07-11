@@ -3,9 +3,8 @@
  *
  * Webview panel que muestra los datos de conexión cuando un motor está corriendo:
  * - Host, puerto, usuario, password
- * - Comando de conexión completo listo para copiar (vía docker exec)
+ * - Comando de conexión completo listo para copiar
  * - Botón "Copiar comando" con feedback visual
- * - Cheat sheet SQL con los fundamentos adaptados al motor
  *
  * El panel se muestra automáticamente cuando un motor arranca exitosamente.
  */
@@ -35,6 +34,5 @@ export declare class ConnectionPanel {
     private update;
     private buildHtml;
     private escape;
-    private escapeAttr;
 }
 //# sourceMappingURL=connectionPanel.d.ts.map

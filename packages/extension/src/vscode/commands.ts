@@ -13,7 +13,7 @@
  */
 
 import * as vscode from 'vscode';
-import { EngineId, ConnectionInfo, EngineState, LaunchConfig } from '../core/engines/engine.types';
+import { EngineId, ConnectionInfo, EngineState } from '../core/engines/engine.types';
 import { getAllEngines, getEngineById, isValidEngineId } from '../core/engines/registry';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { EngineTreeViewProvider } from './treeView';
@@ -81,13 +81,6 @@ export function registerCommands(
           if (answer !== 'Sí, cambiar') return;
         }
 
-        // Preguntar modo de lanzamiento: rápido o personalizado
-        const launchModeResult = await promptLaunchMode(engine.connectionTemplate.defaultUser);
-        if (launchModeResult === undefined) return; // Usuario canceló
-
-        // null = inicio rápido (defaults), objeto = personalizado
-        const launchConfig: LaunchConfig | undefined = launchModeResult ?? undefined;
-
         // Mostrar progreso en la barra de estado
         void vscode.window.withProgress(
           {
@@ -97,14 +90,16 @@ export function registerCommands(
           },
           async (progress) => {
             progress.report({ message: 'Verificando Docker...' });
+            ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'starting', 'Verificando Docker...');
 
             lifecycle.on('statusChanged', (state: EngineState) => {
               if (state.message) {
                 progress.report({ message: state.message });
+                ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, state.status, state.message);
               }
             });
 
-            const result = await lifecycle.startEngine(engineId, launchConfig);
+            const result = await lifecycle.startEngine(engineId);
 
             if (result.ok) {
               activeConnectionInfo = result.value;
@@ -201,6 +196,25 @@ export function registerCommands(
     vscode.commands.registerCommand('sqlEngineLab.refreshEngines', () => {
       treeProvider.refresh();
     }),
+
+    // ------------------------------------------------------------------
+    // Configurar Credenciales
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.configureCredentials', async () => {
+      const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+      
+      const newPassword = await vscode.window.showInputBox({
+        title: 'SQL Engine Lab: Configurar Contraseña Maestra',
+        prompt: 'Esta contraseña se usará tanto para el usuario estándar como para el administrador.',
+        value: config.get<string>('labPassword', 'labpassword'),
+        password: true,
+      });
+
+      if (newPassword !== undefined && newPassword.trim() !== '') {
+        await config.update('labPassword', newPassword, vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage('✓ Contraseña actualizada correctamente. ¡Listo para iniciar motores!');
+      }
+    }),
   ];
 
   return disposables;
@@ -209,17 +223,14 @@ export function registerCommands(
 /**
  * Muestra un QuickPick para seleccionar un motor cuando no se especificó uno.
  */
-async function promptEngineSelection(
-  lifecycle: ContainerLifecycle,
-): Promise<EngineId | undefined> {
+async function promptEngineSelection(lifecycle: ContainerLifecycle): Promise<EngineId | undefined> {
   const currentEngineId = lifecycle.getCurrentEngine();
   const engines = getAllEngines();
 
   const items = engines.map((engine) => ({
     label: engine.displayName,
     description: engine.description,
-    detail:
-      currentEngineId === engine.id ? '● Actualmente corriendo' : undefined,
+    detail: currentEngineId === engine.id ? '● Actualmente corriendo' : undefined,
     engineId: engine.id,
   }));
 
@@ -260,92 +271,4 @@ function resolveEngineId(
   if (typeof arg === 'string' && isValidEngineId(arg)) return arg;
   if (typeof arg === 'object' && 'engine' in arg) return arg.engine.id;
   return undefined;
-}
-
-/**
- * Muestra un QuickPick para elegir entre inicio rápido (con usuario admin listo)
- * o configuración personalizada (donde el usuario elige sus credenciales).
- *
- * @param defaultUser - Usuario por defecto del motor, para mostrarlo en la descripción
- * @returns LaunchConfig (null = usar defaults, objeto = personalizado), o undefined si el usuario canceló
- */
-async function promptLaunchMode(defaultUser: string): Promise<LaunchConfig | null | undefined> {
-  const launchMode = await vscode.window.showQuickPick(
-    [
-      {
-        label: '$(zap) Inicio Rápido',
-        description: `Usuario: ${defaultUser} — listo para usar`,
-        detail: 'Arranca el motor con un usuario admin preconfigurado. Ideal para empezar a practicar de inmediato.',
-        mode: 'quick' as const,
-      },
-      {
-        label: '$(gear) Configuración Personalizada',
-        description: 'Elige tu propio usuario, contraseña y base de datos',
-        detail: 'Personaliza las credenciales de conexión antes de arrancar el motor.',
-        mode: 'custom' as const,
-      },
-    ],
-    {
-      placeHolder: '¿Cómo quieres arrancar el motor?',
-      title: 'SQL Engine Lab — Modo de Lanzamiento',
-    },
-  );
-
-  if (!launchMode) return undefined; // Canceló
-
-  if (launchMode.mode === 'quick') {
-    return null; // Usar defaults
-  }
-
-  // Modo personalizado — pedir credenciales
-  const user = await vscode.window.showInputBox({
-    title: 'SQL Engine Lab — Usuario (1/3)',
-    prompt: 'Nombre del usuario administrador para la base de datos',
-    value: 'admin',
-    placeHolder: 'admin',
-    validateInput: (value) => {
-      if (!value || value.trim().length === 0) {
-        return 'El nombre de usuario no puede estar vacío';
-      }
-      if (/\s/.test(value)) {
-        return 'El nombre de usuario no puede contener espacios';
-      }
-      return null;
-    },
-  });
-  if (user === undefined) return undefined; // Canceló
-
-  const password = await vscode.window.showInputBox({
-    title: 'SQL Engine Lab — Contraseña (2/3)',
-    prompt: 'Contraseña para el usuario',
-    value: 'admin123',
-    placeHolder: 'admin123',
-    password: true,
-    validateInput: (value) => {
-      if (!value || value.length < 4) {
-        return 'La contraseña debe tener al menos 4 caracteres';
-      }
-      return null;
-    },
-  });
-  if (password === undefined) return undefined; // Canceló
-
-  const database = await vscode.window.showInputBox({
-    title: 'SQL Engine Lab — Base de Datos (3/3)',
-    prompt: 'Nombre de la base de datos a crear',
-    value: 'mydb',
-    placeHolder: 'mydb',
-    validateInput: (value) => {
-      if (!value || value.trim().length === 0) {
-        return 'El nombre de la base de datos no puede estar vacío';
-      }
-      if (/\s/.test(value)) {
-        return 'El nombre no puede contener espacios';
-      }
-      return null;
-    },
-  });
-  if (database === undefined) return undefined; // Canceló
-
-  return { user, password, database };
 }

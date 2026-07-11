@@ -24,8 +24,18 @@ export const sqlserverEngine: EngineDefinition = {
     defaultUser: 'labuser',
     defaultPassword: 'labpassword',
     defaultDatabase: 'labdb',
+    adminUser: 'sa',
+    adminPassword: 'labpassword',
+    adminPasswordMessage: 'Misma que el usuario del laboratorio',
+    testCommands: [
+      "SELECT @@VERSION;",
+      "CREATE TABLE test (id INT IDENTITY(1,1) PRIMARY KEY, nombre VARCHAR(50));",
+      "INSERT INTO test (nombre) VALUES ('Hola Lab');",
+      "SELECT * FROM test;"
+    ],
   },
   // SQL Server tarda en arrancar, más aún bajo emulación arm64
-  healthcheckTimeoutMs: 90_000,
+  healthcheckTimeoutMs: 60000,
+  startupSpeed: 'slow',
   iconId: 'database',
 };

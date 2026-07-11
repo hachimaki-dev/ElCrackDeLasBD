@@ -56,13 +56,15 @@ if [[ ! -d "$MYSQL_DATA" ]] || [[ -z "$(ls -A "$MYSQL_DATA" 2>/dev/null)" ]]; th
         CREATE DATABASE IF NOT EXISTS \`${LAB_DATABASE}\`;
         CREATE USER IF NOT EXISTS '${LAB_USER}'@'%' IDENTIFIED BY '${LAB_PASSWORD}';
         GRANT ALL PRIVILEGES ON \`${LAB_DATABASE}\`.* TO '${LAB_USER}'@'%';
+        ALTER USER 'root'@'localhost' IDENTIFIED BY '${LAB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
         FLUSH PRIVILEGES;
 EOSQL
     
     log_info "Usuario '${LAB_USER}' y base de datos '${LAB_DATABASE}' creados."
     
     # Detener el servidor temporal
-    mysqladmin --socket="$MYSQL_SOCKET" -u root shutdown
+    mysqladmin --socket="$MYSQL_SOCKET" -u root --password="${LAB_PASSWORD}" shutdown
     wait $MYSQL_PID 2>/dev/null || true
     
     log_info "MySQL inicializado correctamente."

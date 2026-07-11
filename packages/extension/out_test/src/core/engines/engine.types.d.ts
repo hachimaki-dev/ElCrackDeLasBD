@@ -92,19 +92,6 @@ export interface ConnectionInfo {
     readonly connectionCommand: string;
 }
 /**
- * Configuración de lanzamiento de un motor.
- * Permite al usuario personalizar las credenciales con las que se crea
- * el contenedor Docker. Si no se especifica, se usan los defaults.
- */
-export interface LaunchConfig {
-    /** Usuario personalizado (default: labuser) */
-    readonly user?: string;
-    /** Password personalizada (default: labpassword) */
-    readonly password?: string;
-    /** Nombre de la base de datos (default: labdb) */
-    readonly database?: string;
-}
-/**
  * Resultado exitoso.
  */
 export interface Success<T> {

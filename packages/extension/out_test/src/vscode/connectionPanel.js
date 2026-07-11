@@ -4,9 +4,8 @@
  *
  * Webview panel que muestra los datos de conexión cuando un motor está corriendo:
  * - Host, puerto, usuario, password
- * - Comando de conexión completo listo para copiar (vía docker exec)
+ * - Comando de conexión completo listo para copiar
  * - Botón "Copiar comando" con feedback visual
- * - Cheat sheet SQL con los fundamentos adaptados al motor
  *
  * El panel se muestra automáticamente cuando un motor arranca exitosamente.
  */
@@ -46,7 +45,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConnectionPanel = void 0;
 const vscode = __importStar(require("vscode"));
-const cheatSheets_1 = require("../core/connection/cheatSheets");
 /**
  * Panel Webview que muestra información de conexión de un motor SQL activo.
  * Solo puede existir una instancia a la vez (singleton por sesión de extensión).
@@ -108,7 +106,6 @@ class ConnectionPanel {
     }
     buildHtml(engine, info) {
         const isSqlite = engine.id === 'sqlite';
-        const cheatSheet = (0, cheatSheets_1.getCheatSheet)(engine.id);
         const credentialsRows = isSqlite
             ? ''
             : `
@@ -137,29 +134,6 @@ class ConnectionPanel {
           <td class="value"><code>${info.port}</code></td>
         </tr>
       `;
-        // Build cheat sheet HTML
-        const tipsHtml = cheatSheet.tips
-            .map((tip) => `<li>${this.escape(tip)}</li>`)
-            .join('\n');
-        const sectionsHtml = cheatSheet.sections
-            .map((section) => {
-            const itemsHtml = section.items
-                .map((item) => `
-            <div class="cheat-item">
-              <div class="cheat-label">${this.escape(item.label)}</div>
-              <pre class="cheat-code"><code>${this.escape(item.sql)}</code></pre>
-              <button class="copy-sql-btn" onclick="copySql(this)" data-sql="${this.escapeAttr(item.sql)}">📋 Copiar</button>
-            </div>
-          `)
-                .join('\n');
-            return `
-          <div class="cheat-section">
-            <div class="cheat-section-title">${this.escape(section.title)}</div>
-            ${itemsHtml}
-          </div>
-        `;
-        })
-            .join('\n');
         return /* html */ `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -180,7 +154,7 @@ class ConnectionPanel {
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
       padding: 24px;
-      max-width: 800px;
+      max-width: 700px;
     }
 
     .header {
@@ -290,115 +264,6 @@ class ConnectionPanel {
       color: var(--vscode-descriptionForeground);
       line-height: 1.5;
     }
-
-    /* ---- Cheat Sheet Styles ---- */
-    .cheat-sheet-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .cheat-sheet-toggle {
-      font-size: 11px;
-      color: var(--vscode-textLink-foreground);
-      cursor: pointer;
-      border: none;
-      background: none;
-      font-family: var(--vscode-font-family);
-      padding: 4px 8px;
-      border-radius: 3px;
-    }
-    .cheat-sheet-toggle:hover {
-      background: var(--vscode-button-secondaryBackground);
-    }
-
-    .cheat-body { margin-top: 16px; }
-
-    .tips-list {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 20px;
-    }
-    .tips-list li {
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-      padding: 4px 0 4px 16px;
-      position: relative;
-      line-height: 1.5;
-    }
-    .tips-list li::before {
-      content: '💡';
-      position: absolute;
-      left: 0;
-      font-size: 10px;
-    }
-
-    .cheat-section {
-      margin-bottom: 20px;
-    }
-
-    .cheat-section-title {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 10px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-
-    .cheat-item {
-      margin-bottom: 14px;
-      position: relative;
-    }
-
-    .cheat-label {
-      font-size: 12px;
-      font-weight: 500;
-      margin-bottom: 4px;
-      color: var(--vscode-textLink-foreground);
-    }
-
-    .cheat-code {
-      background: var(--vscode-textCodeBlock-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px;
-      padding: 10px 14px;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-x: auto;
-      white-space: pre;
-      margin: 0;
-    }
-
-    .copy-sql-btn {
-      position: absolute;
-      top: 0;
-      right: 0;
-      font-size: 11px;
-      padding: 2px 8px;
-      border: none;
-      background: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-      border-radius: 3px;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-    .cheat-item:hover .copy-sql-btn { opacity: 1; }
-    .copy-sql-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    .copy-sql-btn.copied-sql {
-      background: #3fb950;
-      color: #fff;
-      opacity: 1;
-    }
-
-    .divider {
-      border: none;
-      border-top: 1px solid var(--vscode-panel-border);
-      margin: 24px 0;
-    }
   </style>
 </head>
 <body>
@@ -410,7 +275,8 @@ class ConnectionPanel {
     </div>
   </div>
 
-  ${!isSqlite ? `
+  ${!isSqlite
+            ? `
   <div class="section">
     <div class="section-title">Datos de conexión</div>
     <table>
@@ -418,7 +284,8 @@ class ConnectionPanel {
       ${credentialsRows}
     </table>
   </div>
-  ` : ''}
+  `
+            : ''}
 
   <div class="section">
     <div class="section-title">Comando de conexión</div>
@@ -432,26 +299,8 @@ class ConnectionPanel {
     </div>
   </div>
 
-  <hr class="divider">
-
-  <!-- Cheat Sheet SQL -->
-  <div class="section" id="cheatSheetSection">
-    <div class="cheat-sheet-header" onclick="toggleCheatSheet()">
-      <div class="section-title" style="margin-bottom: 0;">📖 Cheat Sheet SQL — ${this.escape(cheatSheet.engineName)}</div>
-      <button class="cheat-sheet-toggle" id="toggleBtn">▼ Mostrar</button>
-    </div>
-
-    <div class="cheat-body" id="cheatBody" style="display: none;">
-      <ul class="tips-list">
-        ${tipsHtml}
-      </ul>
-      ${sectionsHtml}
-    </div>
-  </div>
-
   <script>
     const vscode = acquireVsCodeApi();
-    let cheatSheetOpen = false;
 
     function copyCommand() {
       const cmd = document.getElementById('cmd').textContent;
@@ -466,26 +315,6 @@ class ConnectionPanel {
         label.textContent = 'Copiar comando';
       }, 2000);
     }
-
-    function copySql(button) {
-      const sql = button.getAttribute('data-sql');
-      vscode.postMessage({ command: 'copy', text: sql });
-
-      button.classList.add('copied-sql');
-      button.textContent = '✓ Copiado';
-      setTimeout(() => {
-        button.classList.remove('copied-sql');
-        button.textContent = '📋 Copiar';
-      }, 2000);
-    }
-
-    function toggleCheatSheet() {
-      cheatSheetOpen = !cheatSheetOpen;
-      const body = document.getElementById('cheatBody');
-      const btn = document.getElementById('toggleBtn');
-      body.style.display = cheatSheetOpen ? 'block' : 'none';
-      btn.textContent = cheatSheetOpen ? '▲ Ocultar' : '▼ Mostrar';
-    }
   </script>
 </body>
 </html>`;
@@ -496,15 +325,6 @@ class ConnectionPanel {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
-    }
-    escapeAttr(text) {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/\n/g, '&#10;');
     }
 }
 exports.ConnectionPanel = ConnectionPanel;

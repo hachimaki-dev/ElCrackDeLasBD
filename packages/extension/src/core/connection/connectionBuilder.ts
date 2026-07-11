@@ -5,14 +5,11 @@
  * Cada motor tiene una forma distinta de armar su comando de conexión
  * (psql, mysql, sqlplus, sqlcmd), pero la interfaz es la misma.
  *
- * Los comandos se generan con `docker exec` para que funcionen desde
- * cualquier terminal del usuario sin necesidad de instalar clientes nativos.
- *
  * Los placeholders {host}, {port}, {user}, {password}, {database} se resuelven
  * a partir de la ConnectionTemplate del motor y los datos de conexión reales.
  */
 
-import { EngineDefinition, ConnectionInfo, LaunchConfig, DOCKER_IMAGE_CONFIG } from '../engines/engine.types';
+import { EngineDefinition, ConnectionInfo, DOCKER_IMAGE_CONFIG, EngineConfig } from '../engines/engine.types';
 
 /**
  * Datos parciales de conexión (host y port) usados para construir el comando completo.
@@ -24,43 +21,64 @@ interface PartialConnectionInfo {
 
 /**
  * Construye el comando de conexión completo para un motor, listo para copiar y pegar.
- * El comando usa `docker exec -it` para ejecutar el cliente dentro del contenedor,
- * así el usuario no necesita instalar psql, mysql, sqlplus, etc. en su máquina.
  *
  * @param engine - Definición del motor con la template de conexión
  * @param connectionInfo - Datos de conexión parciales o completos
- * @returns Comando de conexión formateado con docker exec
+ * @returns Comando de conexión formateado (ej: "docker exec -it sql-engine-lab psql -h 127.0.0.1 -p 5432 -U labuser -d labdb")
  *
  * @example
  * ```typescript
  * const engine = getEngineById('postgres');
- * const command = buildConnectionCommand(engine, { host: 'localhost', port: 5432 });
- * // → "docker exec -it sql-engine-lab psql -h localhost -p 5432 -U labuser -d labdb"
+ * const command = buildConnectionCommand(engine, { host: '127.0.0.1', port: 5432 });
+ * // → "docker exec -it sql-engine-lab psql -h 127.0.0.1 -p 5432 -U labuser -d labdb"
  * ```
  */
 export function buildConnectionCommand(
   engine: EngineDefinition,
   connectionInfo: PartialConnectionInfo | ConnectionInfo,
+  isAdmin: boolean = false,
 ): string {
   const template = engine.connectionTemplate;
-  const containerName = DOCKER_IMAGE_CONFIG.containerName;
 
-  const user = 'user' in connectionInfo ? connectionInfo.user : template.defaultUser;
-  const password = 'password' in connectionInfo ? connectionInfo.password : template.defaultPassword;
-  const database = 'database' in connectionInfo ? connectionInfo.database : template.defaultDatabase;
+  const user = isAdmin
+    ? template.adminUser || template.defaultUser
+    : 'user' in connectionInfo ? connectionInfo.user : template.defaultUser;
+  
+  let password = '';
+  if (isAdmin) {
+    const isSharedPassword = template.adminPassword === DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
+    if (isSharedPassword && 'password' in connectionInfo) {
+      password = connectionInfo.password;
+    } else {
+      password = template.adminPassword || '';
+    }
+  } else {
+    password = 'password' in connectionInfo ? connectionInfo.password : template.defaultPassword;
+  }
+  const database =
+    'database' in connectionInfo ? connectionInfo.database : template.defaultDatabase;
 
-  // Dentro del contenedor, el host interno lo definimos a 127.0.0.1
-  // para forzar conexiones TCP (necesario para MySQL y MariaDB)
-  const internalHost = '127.0.0.1';
-  const internalPort = String(engine.defaultPort);
+  const host = engine.id === 'mysql' || engine.id === 'mariadb' ? '127.0.0.1' : 'localhost';
+
+  // El comando siempre se ejecuta dentro del contenedor vía docker exec,
+  // por lo que SIEMPRE debemos apuntar al puerto interno por defecto del motor,
+  // ignorando cualquier puerto mapeado dinámicamente en el host.
+  const internalPort = engine.defaultPort === 0 ? 0 : engine.defaultPort;
 
   const resolvedArgs = resolveTemplate(template.argsTemplate, {
-    host: internalHost,
-    port: internalPort,
+    host,
+    port: String(internalPort),
     user,
     password,
     database,
   });
+
+  const containerName = DOCKER_IMAGE_CONFIG.containerName;
+
+  // SQLite no usa el mismo formato comando + args
+  if (engine.id === 'sqlite') {
+    return `docker exec -it ${containerName} ${template.command} ${resolvedArgs}`;
+  }
 
   return `docker exec -it ${containerName} ${template.command} ${resolvedArgs}`;
 }
@@ -70,22 +88,21 @@ export function buildConnectionCommand(
  *
  * @param engine - Definición del motor
  * @param partialInfo - Host y puerto del contenedor
- * @param launchConfig - Configuración opcional de credenciales personalizadas
  * @returns ConnectionInfo completo (sin el comando, que se construye aparte)
  */
 export function buildConnectionDetails(
   engine: EngineDefinition,
   partialInfo: PartialConnectionInfo,
-  launchConfig?: LaunchConfig,
+  config?: EngineConfig,
 ): Omit<ConnectionInfo, 'connectionCommand'> {
   const template = engine.connectionTemplate;
 
   return {
     host: partialInfo.host,
     port: partialInfo.port || engine.defaultPort,
-    user: launchConfig?.user || template.defaultUser,
-    password: launchConfig?.password || template.defaultPassword,
-    database: launchConfig?.database || template.defaultDatabase,
+    user: config?.labUser || template.defaultUser,
+    password: config?.labPassword || template.defaultPassword,
+    database: config?.labDatabase || template.defaultDatabase,
   };
 }
 

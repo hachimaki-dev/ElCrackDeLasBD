@@ -75,7 +75,6 @@ export declare class DockerClient {
             HostPort: string;
         }>>;
         exposedPorts: Record<string, Record<string, never>>;
-        shmSize?: number;
     }): Promise<Result<Dockerode.Container>>;
     /**
      * Detiene y elimina un contenedor.

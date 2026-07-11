@@ -6,67 +6,59 @@
  * Cada motor tiene una forma distinta de armar su comando de conexión
  * (psql, mysql, sqlplus, sqlcmd), pero la interfaz es la misma.
  *
- * Los comandos se generan con `docker exec` para que funcionen desde
- * cualquier terminal del usuario sin necesidad de instalar clientes nativos.
- *
  * Los placeholders {host}, {port}, {user}, {password}, {database} se resuelven
  * a partir de la ConnectionTemplate del motor y los datos de conexión reales.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildConnectionCommand = buildConnectionCommand;
 exports.buildConnectionDetails = buildConnectionDetails;
-const engine_types_1 = require("../engines/engine.types");
 /**
  * Construye el comando de conexión completo para un motor, listo para copiar y pegar.
- * El comando usa `docker exec -it` para ejecutar el cliente dentro del contenedor,
- * así el usuario no necesita instalar psql, mysql, sqlplus, etc. en su máquina.
  *
  * @param engine - Definición del motor con la template de conexión
  * @param connectionInfo - Datos de conexión parciales o completos
- * @returns Comando de conexión formateado con docker exec
+ * @returns Comando de conexión formateado (ej: "psql -h localhost -p 5432 -U labuser -d labdb")
  *
  * @example
  * ```typescript
  * const engine = getEngineById('postgres');
  * const command = buildConnectionCommand(engine, { host: 'localhost', port: 5432 });
- * // → "docker exec -it sql-engine-lab psql -h localhost -p 5432 -U labuser -d labdb"
+ * // → "psql -h localhost -p 5432 -U labuser -d labdb"
  * ```
  */
 function buildConnectionCommand(engine, connectionInfo) {
     const template = engine.connectionTemplate;
-    const containerName = engine_types_1.DOCKER_IMAGE_CONFIG.containerName;
     const user = 'user' in connectionInfo ? connectionInfo.user : template.defaultUser;
     const password = 'password' in connectionInfo ? connectionInfo.password : template.defaultPassword;
     const database = 'database' in connectionInfo ? connectionInfo.database : template.defaultDatabase;
-    // Dentro del contenedor, el host interno lo definimos a 127.0.0.1
-    // para forzar conexiones TCP (necesario para MySQL y MariaDB)
-    const internalHost = '127.0.0.1';
-    const internalPort = String(engine.defaultPort);
     const resolvedArgs = resolveTemplate(template.argsTemplate, {
-        host: internalHost,
-        port: internalPort,
+        host: connectionInfo.host,
+        port: String(connectionInfo.port),
         user,
         password,
         database,
     });
-    return `docker exec -it ${containerName} ${template.command} ${resolvedArgs}`;
+    // SQLite no usa el mismo formato comando + args
+    if (engine.id === 'sqlite') {
+        return `${template.command} ${resolvedArgs}`;
+    }
+    return `${template.command} ${resolvedArgs}`;
 }
 /**
  * Construye los detalles de conexión completos para mostrar en la UI.
  *
  * @param engine - Definición del motor
  * @param partialInfo - Host y puerto del contenedor
- * @param launchConfig - Configuración opcional de credenciales personalizadas
  * @returns ConnectionInfo completo (sin el comando, que se construye aparte)
  */
-function buildConnectionDetails(engine, partialInfo, launchConfig) {
+function buildConnectionDetails(engine, partialInfo) {
     const template = engine.connectionTemplate;
     return {
         host: partialInfo.host,
         port: partialInfo.port || engine.defaultPort,
-        user: launchConfig?.user || template.defaultUser,
-        password: launchConfig?.password || template.defaultPassword,
-        database: launchConfig?.database || template.defaultDatabase,
+        user: template.defaultUser,
+        password: template.defaultPassword,
+        database: template.defaultDatabase,
     };
 }
 /**

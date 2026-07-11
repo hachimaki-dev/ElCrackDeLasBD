@@ -116,8 +116,7 @@ export class EngineTreeViewProvider implements vscode.TreeDataProvider<EngineTre
 
   getChildren(): EngineTreeItem[] {
     return getAllEngines().map(
-      (engine) =>
-        new EngineTreeItem(engine, this.engineStatuses.get(engine.id) ?? 'stopped'),
+      (engine) => new EngineTreeItem(engine, this.engineStatuses.get(engine.id) ?? 'stopped'),
     );
   }
 

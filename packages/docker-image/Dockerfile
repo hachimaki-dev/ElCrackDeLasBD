@@ -112,6 +112,8 @@ COPY --chown=mssql:mssql --from=sqlserver-stage /opt/mssql /opt/mssql
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libldap-2.5-0 \
     libsasl2-2 \
+    libsss-nss-idmap0 \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /opt/mssql/bin/sqlservr /usr/local/bin/sqlservr
 

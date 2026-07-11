@@ -18,6 +18,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DockerClient = void 0;
 const dockerode_1 = __importDefault(require("dockerode"));
+const dockerConfigResolver_1 = require("./dockerConfigResolver");
 const engine_types_1 = require("../engines/engine.types");
 /**
  * Facade sobre dockerode que abstrae la API de Docker.
@@ -35,7 +36,7 @@ const engine_types_1 = require("../engines/engine.types");
 class DockerClient {
     docker;
     constructor(dockerodeInstance) {
-        this.docker = dockerodeInstance ?? new dockerode_1.default();
+        this.docker = dockerodeInstance ?? new dockerode_1.default((0, dockerConfigResolver_1.resolveDockerOptions)());
     }
     /**
      * Verifica que Docker esté corriendo y accesible.
@@ -159,18 +160,14 @@ class DockerClient {
                 await existing.remove();
             }
             const envArray = Object.entries(options.env).map(([key, value]) => `${key}=${value}`);
-            const hostConfig = {
-                PortBindings: options.portBindings,
-            };
-            if (options.shmSize) {
-                hostConfig.ShmSize = options.shmSize;
-            }
             const container = await this.docker.createContainer({
                 name: options.name,
                 Image: options.image,
                 Env: envArray,
                 ExposedPorts: options.exposedPorts,
-                HostConfig: hostConfig,
+                HostConfig: {
+                    PortBindings: options.portBindings,
+                },
             });
             await container.start();
             return (0, engine_types_1.success)(container);
@@ -178,7 +175,8 @@ class DockerClient {
         catch (error) {
             // Detectar error de puerto en uso
             const errorMessage = error instanceof Error ? error.message : String(error);
-            if (errorMessage.includes('port is already allocated') || errorMessage.includes('address already in use')) {
+            if (errorMessage.includes('port is already allocated') ||
+                errorMessage.includes('address already in use')) {
                 return (0, engine_types_1.failure)({
                     code: 'PORT_IN_USE',
                     message: `El puerto ya está en uso. Cierra la aplicación que lo esté ocupando o cambia el puerto.`,

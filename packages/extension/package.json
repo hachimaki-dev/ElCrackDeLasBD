@@ -81,14 +81,25 @@
         "title": "Refrescar",
         "category": "SQL Engine Lab",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "sqlEngineLab.configureCredentials",
+        "title": "Configurar Credenciales",
+        "category": "SQL Engine Lab",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "sqlEngineLab.configureCredentials",
+          "when": "view == sqlEngineLab.engineList",
+          "group": "navigation@1"
+        },
+        {
           "command": "sqlEngineLab.refreshEngines",
           "when": "view == sqlEngineLab.engineList",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -108,6 +119,26 @@
           "group": "inline"
         }
       ]
+    },
+    "configuration": {
+      "title": "SQL Engine Lab",
+      "properties": {
+        "sqlEngineLab.credentials.labUser": {
+          "type": "string",
+          "default": "labuser",
+          "description": "Usuario estándar por defecto del laboratorio."
+        },
+        "sqlEngineLab.credentials.labPassword": {
+          "type": "string",
+          "default": "labpassword",
+          "description": "Contraseña estándar por defecto. En motores como SQL Server u Oracle, esta también es la contraseña del administrador."
+        },
+        "sqlEngineLab.credentials.labDatabase": {
+          "type": "string",
+          "default": "labdb",
+          "description": "Base de datos por defecto del laboratorio."
+        }
+      }
     }
   },
   "scripts": {
@@ -125,6 +156,7 @@
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.31",
+    "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",

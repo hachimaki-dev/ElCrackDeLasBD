@@ -44,10 +44,9 @@ class ContainerLifecycle extends events_1.EventEmitter {
      * esperar healthcheck → emitir connectionInfo
      *
      * @param engineId - ID del motor a iniciar (debe estar registrado en el catálogo)
-     * @param launchConfig - Configuración opcional de credenciales personalizadas
      * @returns Result con la info de conexión si arrancó correctamente, o un error tipado
      */
-    async startEngine(engineId, launchConfig) {
+    async startEngine(engineId) {
         // Buscar definición del motor
         const engine = (0, registry_1.getEngineById)(engineId);
         if (!engine) {
@@ -93,10 +92,6 @@ class ContainerLifecycle extends events_1.EventEmitter {
         }
         // Crear y arrancar contenedor
         this.updateStatus(engineId, 'starting', `Iniciando ${engine.displayName}...`);
-        // Resolver credenciales: launchConfig > template defaults > config defaults
-        const resolvedUser = launchConfig?.user || engine.connectionTemplate.defaultUser || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
-        const resolvedPassword = launchConfig?.password || engine.connectionTemplate.defaultPassword || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
-        const resolvedDatabase = launchConfig?.database || engine.connectionTemplate.defaultDatabase || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
         const portBindings = this.buildPortBindings(engine);
         const exposedPorts = this.buildExposedPorts(engine);
         const startResult = await this.dockerClient.createAndStartContainer({
@@ -104,13 +99,12 @@ class ContainerLifecycle extends events_1.EventEmitter {
             image: fullImageName,
             env: {
                 ENGINE: engine.dockerEnvValue,
-                LAB_USER: resolvedUser,
-                LAB_PASSWORD: resolvedPassword,
-                LAB_DATABASE: resolvedDatabase,
+                LAB_USER: engine.connectionTemplate.defaultUser || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER,
+                LAB_PASSWORD: engine.connectionTemplate.defaultPassword || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,
+                LAB_DATABASE: engine.connectionTemplate.defaultDatabase || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE,
             },
             portBindings,
             exposedPorts,
-            shmSize: 1073741824, // 1GB de SHM (Crítico para que Oracle 23c Free funcione)
         });
         if (!startResult.ok) {
             this.updateStatus(engineId, 'error', startResult.error.message);
@@ -133,7 +127,7 @@ class ContainerLifecycle extends events_1.EventEmitter {
         const connectionDetails = (0, connectionBuilder_1.buildConnectionDetails)(engine, {
             host: 'localhost',
             port: engine.defaultPort,
-        }, launchConfig);
+        });
         const connectionInfo = {
             ...connectionDetails,
             connectionCommand: (0, connectionBuilder_1.buildConnectionCommand)(engine, connectionDetails),

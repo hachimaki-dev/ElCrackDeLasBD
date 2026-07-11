@@ -35,6 +35,16 @@ export interface ConnectionTemplate {
   readonly defaultPassword: string;
   /** Base de datos por defecto del laboratorio */
   readonly defaultDatabase: string;
+  /** Usuario administrador por defecto del motor (ej: sa, root, postgres) */
+  readonly adminUser?: string;
+  /** Password del usuario administrador (si aplica) */
+  readonly adminPassword?: string;
+  /** Si es true, el motor no tiene password de admin por defecto (ej. MySQL local) o requiere input manual. Sirve para mostrar un mensaje claro en la UI. */
+  readonly adminPasswordRequiresInput?: boolean;
+  /** Mensaje personalizado para mostrar al usuario sobre la password de admin (ej. 'Sin contraseña por defecto') */
+  readonly adminPasswordMessage?: string;
+  /** Comandos de prueba de ejemplo (ej: 'SELECT 1;', 'CREATE TABLE...') */
+  readonly testCommands?: string[];
 }
 
 /**
@@ -58,6 +68,8 @@ export interface EngineDefinition {
   readonly connectionTemplate: ConnectionTemplate;
   /** Timeout en milisegundos para el healthcheck (Oracle necesita más que PostgreSQL) */
   readonly healthcheckTimeoutMs: number;
+  /** Indicador de velocidad de inicio esperado, útil para dar feedback en la UI */
+  readonly startupSpeed: 'fast' | 'slow';
   /** Icono para la UI (codicon de VS Code) */
   readonly iconId: string;
 }
@@ -108,6 +120,8 @@ export interface ConnectionInfo {
   readonly database: string;
   /** Comando completo listo para copiar y pegar en la terminal */
   readonly connectionCommand: string;
+  /** Comando de conexión como administrador (si aplica) */
+  readonly adminConnectionCommand?: string;
 }
 
 /**
@@ -194,6 +208,7 @@ export type EngineErrorCode =
   | 'ENGINE_STOP_FAILED'
   | 'ENGINE_ALREADY_RUNNING'
   | 'PORT_IN_USE'
+  | 'HEALTHCHECK_FAILED'
   | 'HEALTHCHECK_TIMEOUT'
   | 'UNKNOWN_ENGINE'
   | 'CONTAINER_ERROR';
@@ -246,9 +261,9 @@ export interface PullProgress {
  */
 export const DOCKER_IMAGE_CONFIG = {
   /** Nombre de la imagen en Docker Hub */
-  imageName: 'hachimakidev/sql-engine-lab',
+  imageName: 'sql-engine-lab',
   /** Tag de la imagen */
-  imageTag: 'latest',
+  imageTag: 'dev',
   /** Nombre del contenedor que crea la extensión */
   containerName: 'sql-engine-lab',
   /** Variables de entorno por defecto */
@@ -258,3 +273,23 @@ export const DOCKER_IMAGE_CONFIG = {
     LAB_DATABASE: 'labdb',
   },
 } as const;
+
+// ==========================================================================
+// Configuration Types
+// ==========================================================================
+
+/**
+ * Configuración de credenciales definida por el usuario.
+ */
+export interface EngineConfig {
+  readonly labUser: string;
+  readonly labPassword: string;
+  readonly labDatabase: string;
+}
+
+/**
+ * Interfaz para proveer configuración al Core sin acoplarlo a VS Code.
+ */
+export interface ConfigurationProvider {
+  getConfig(): EngineConfig;
+}

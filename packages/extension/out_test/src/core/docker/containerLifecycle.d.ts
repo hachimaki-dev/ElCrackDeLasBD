@@ -11,7 +11,7 @@
  * Si se pide iniciar un motor mientras otro corre, se detiene el activo primero.
  */
 import { EventEmitter } from 'events';
-import { EngineId, EngineStatus, ConnectionInfo, LaunchConfig, Result } from '../engines/engine.types';
+import { EngineId, EngineStatus, ConnectionInfo, Result } from '../engines/engine.types';
 import { DockerClient } from './dockerClient';
 /**
  * Gestor del ciclo de vida de contenedores de motores SQL.
@@ -37,10 +37,9 @@ export declare class ContainerLifecycle extends EventEmitter {
      * esperar healthcheck → emitir connectionInfo
      *
      * @param engineId - ID del motor a iniciar (debe estar registrado en el catálogo)
-     * @param launchConfig - Configuración opcional de credenciales personalizadas
      * @returns Result con la info de conexión si arrancó correctamente, o un error tipado
      */
-    startEngine(engineId: EngineId, launchConfig?: LaunchConfig): Promise<Result<ConnectionInfo>>;
+    startEngine(engineId: EngineId): Promise<Result<ConnectionInfo>>;
     /**
      * Detiene el motor activo y limpia el contenedor.
      *

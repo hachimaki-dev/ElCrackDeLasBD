@@ -30,29 +30,64 @@ sql-engine-lab/
     └── docker-image/           # Imagen Docker multi-motor
 ```
 
-## Inicio rápido (desarrollo)
+## Requisitos previos
 
-### Imagen Docker
+Antes de comenzar, asegúrate de tener instalado y configurado lo siguiente en tu sistema:
+- **Node.js** (v20 o superior recomendado) y `npm`
+- **Docker** o **Docker Desktop** (asegúrate de que el servicio esté corriendo)
+- **Visual Studio Code**
+
+---
+
+## Guía de Inicio Rápido (Tras Clonar)
+
+Sigue estos pasos para compilar e iniciar la aplicación localmente:
+
+### Paso 1: Instalar dependencias y compilar la extensión
+Desde la raíz del repositorio clonado, instala las dependencias de la extensión de VS Code y compila el código TypeScript:
 
 ```bash
-cd packages/docker-image
-
-# Build local
-docker build -t sql-engine-lab:dev .
-
-# Probar motor (sin extensión)
-docker run -e ENGINE=postgres -p 5432:5432 sql-engine-lab:dev
-psql -h localhost -p 5432 -U labuser -d labdb
-```
-
-### Extensión
-
-```bash
+# Entrar al directorio de la extensión
 cd packages/extension
+
+# Instalar dependencias de desarrollo y producción
 npm install
+
+# Compilar el código TypeScript
 npm run compile
-# Abrir VS Code → F5 → Extension Development Host
 ```
+
+### Paso 2: Construir la imagen Docker local
+La extensión levanta los motores utilizando una imagen Docker multi-motor unificada. Debes construir esta imagen localmente:
+
+```bash
+# Volver a la raíz y entrar al directorio de la imagen Docker
+cd ../docker-image
+
+# Construir la imagen Docker con el tag esperado
+docker build -t sql-engine-lab:dev .
+```
+
+### Paso 3: Lanzar la extensión en modo de desarrollo
+1. Abre el repositorio completo en Visual Studio Code:
+   ```bash
+   code ../..
+   ```
+2. Presiona `F5` (o ve a la pestaña *Run and Debug* y haz clic en **Extension**) para iniciar una nueva ventana de VS Code (*Extension Development Host*) con la extensión cargada.
+3. En la barra lateral izquierda aparecerá la sección de **SQL Engine Lab** con el listado de motores disponibles.
+
+---
+
+## Ejecución de Pruebas Unitarias y Linting
+
+Para asegurarte de que todo funciona correctamente después de inicializar la aplicación, puedes ejecutar los linters y las pruebas unitarias:
+
+```bash
+# Desde la raíz del repositorio
+./scripts/test-extension.sh
+```
+
+Este script compila los archivos de prueba, ejecuta el formateador/linter y corre todas las pruebas unitarias utilizando Mocha.
 
 ## Credenciales por defecto
 

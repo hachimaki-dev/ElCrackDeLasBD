@@ -15,6 +15,7 @@ import { DockerClient } from './core/docker/dockerClient';
 import { ContainerLifecycle } from './core/docker/containerLifecycle';
 import { EngineTreeViewProvider } from './vscode/treeView';
 import { registerCommands } from './vscode/commands';
+import { VsCodeConfigurationProvider } from './vscode/configProvider';
 
 /**
  * Activación de la extensión.
@@ -26,7 +27,8 @@ import { registerCommands } from './vscode/commands';
 export function activate(context: vscode.ExtensionContext): void {
   // ---- Crear instancias de las piezas core ----
   const dockerClient = new DockerClient();
-  const lifecycle = new ContainerLifecycle(dockerClient);
+  const configProvider = new VsCodeConfigurationProvider();
+  const lifecycle = new ContainerLifecycle(dockerClient, configProvider);
 
   // ---- Registrar Tree View ----
   const treeProvider = new EngineTreeViewProvider(lifecycle);
