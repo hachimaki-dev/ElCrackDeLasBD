@@ -147,6 +147,7 @@ test_files=(
   "test/core/registry.test.ts"
   "test/core/connectionBuilder.test.ts"
   "test/core/containerLifecycle.test.ts"
+  "test/core/dockerConfigResolver.test.ts"
 )
 
 # Compilar tests también
@@ -206,9 +207,7 @@ cat > /tmp/tsconfig_test.json << EOF
 EOF
 
 # Compilar
-compile_test_out=$(npx tsc -p /tmp/tsconfig_test.json 2>&1 \
-  --project /tmp/tsconfig_test.json \
-  2>&1) || true
+compile_test_out=$(cd "$EXTENSION_DIR" && npx tsc -p /tmp/tsconfig_test.json 2>&1) || true
 
 if [[ -d "/tmp/sel_test_out" ]]; then
   # Ejecutar cada test directamente con node + mocha
@@ -232,8 +231,8 @@ if [[ -d "/tmp/sel_test_out" ]]; then
     test_output=$(cd "$EXTENSION_DIR" && \
       node --require /tmp/sel_test_out/src/core/engines/engine.types.js \
       "$EXTENSION_DIR/node_modules/.bin/mocha" \
-      --require "$EXTENSION_DIR/node_modules/ts-node/register" \
-      "$EXTENSION_DIR/$test_file" \
+      --ui tdd \
+      "$test_js" \
       --reporter spec 2>&1) || test_exit=$?
     
     if [[ "${test_exit:-0}" -eq 0 ]]; then

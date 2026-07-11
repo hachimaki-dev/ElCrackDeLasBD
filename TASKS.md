@@ -1,7 +1,9 @@
 # SQL Engine Laboratory — Tablero de Tareas
 
 ## En progreso
-_(nada — MVP completado)_
+_(nada)_
+
+
 
 ## Listo para tomar (Próximos pasos post-MVP)
 
@@ -59,3 +61,6 @@ _(nada)_
 - [x] commands.ts (5 comandos VS Code con manejo de errores)
 - [x] extension.ts (entry point — solo wiring)
 - [x] Tests unitarios: registry, connectionBuilder, containerLifecycle
+- [x] Detección automática de Docker socket y SO (agente: antigravity, completado 2026-07-10)
+- [x] Rediseño completo de UX/UI del Webview con pestañas, estado de carga y comandos de prueba (agente: antigravity, completado 2026-07-10)
+- [x] Resiliencia de puertos dinámicos y configuración de credenciales visual con InputBox (agente: antigravity, completado 2026-07-10)

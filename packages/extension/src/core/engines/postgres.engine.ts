@@ -6,7 +6,7 @@
  * Cliente nativo: psql
  */
 
-import { EngineDefinition } from './engine.types';
+import { EngineDefinition, DOCKER_IMAGE_CONFIG } from './engine.types';
 
 export const postgresEngine: EngineDefinition = {
   id: 'postgres',
@@ -20,7 +20,17 @@ export const postgresEngine: EngineDefinition = {
     defaultUser: 'labuser',
     defaultPassword: 'labpassword',
     defaultDatabase: 'labdb',
+    adminUser: 'postgres',
+    adminPassword: DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,
+    adminPasswordMessage: 'Misma que el usuario del laboratorio',
+    testCommands: [
+      'SELECT version();',
+      'CREATE TABLE test (id serial PRIMARY KEY, nombre varchar(50));',
+      "INSERT INTO test (nombre) VALUES ('Hola Lab');",
+      'SELECT * FROM test;'
+    ],
   },
-  healthcheckTimeoutMs: 30_000,
+  healthcheckTimeoutMs: 15000,
+  startupSpeed: 'fast',
   iconId: 'database',
 };

@@ -1,0 +1,190 @@
+/**
+ * SQL Engine Laboratory — Core Type Definitions
+ *
+ * Este archivo define las interfaces centrales del sistema.
+ * Todas las piezas del sistema (engines, docker, connection) dependen de estos tipos.
+ *
+ * Decisiones de diseño:
+ * - Result<T, E> en vez de excepciones para errores esperados (ENGINEERING_STANDARDS.md §3)
+ * - EngineDefinition como interfaz Adapter que cada motor implementa (Open/Closed Principle)
+ * - Tipos estrictos para IDs de motor (EngineId) en vez de strings genéricos
+ */
+/**
+ * Identificadores válidos de motores SQL soportados.
+ * Agregar un motor nuevo = agregar un literal a este union type.
+ */
+export type EngineId = 'postgres' | 'mysql' | 'mariadb' | 'sqlite' | 'oracle' | 'sqlserver';
+/**
+ * Template para construir el comando de conexión al motor desde la terminal del usuario.
+ * Los placeholders {host}, {port}, {user}, {password}, {database} se resuelven en runtime.
+ */
+export interface ConnectionTemplate {
+    /** Nombre del binario cliente (ej: "psql", "mysql", "sqlplus") */
+    readonly command: string;
+    /** Template de argumentos con placeholders (ej: "-h {host} -p {port} -U {user} -d {database}") */
+    readonly argsTemplate: string;
+    /** Usuario por defecto del laboratorio */
+    readonly defaultUser: string;
+    /** Password por defecto del laboratorio */
+    readonly defaultPassword: string;
+    /** Base de datos por defecto del laboratorio */
+    readonly defaultDatabase: string;
+}
+/**
+ * Definición completa de un motor SQL.
+ * Cada motor implementa esta interfaz como un Adapter (ENGINEERING_STANDARDS.md §3).
+ * Agregar un motor nuevo = crear un archivo que exporte un EngineDefinition,
+ * sin tocar código existente.
+ */
+export interface EngineDefinition {
+    /** Identificador único del motor (usado como valor de la variable ENGINE en Docker) */
+    readonly id: EngineId;
+    /** Nombre para mostrar en la UI */
+    readonly displayName: string;
+    /** Descripción corta del motor */
+    readonly description: string;
+    /** Puerto por defecto del motor (0 para SQLite que no usa puerto) */
+    readonly defaultPort: number;
+    /** Valor de la variable de entorno ENGINE para Docker */
+    readonly dockerEnvValue: string;
+    /** Template del comando de conexión desde la terminal */
+    readonly connectionTemplate: ConnectionTemplate;
+    /** Timeout en milisegundos para el healthcheck (Oracle necesita más que PostgreSQL) */
+    readonly healthcheckTimeoutMs: number;
+    /** Icono para la UI (codicon de VS Code) */
+    readonly iconId: string;
+}
+/**
+ * Estados posibles de un motor SQL.
+ * El ciclo de vida es: stopped → pulling → starting → running → stopping → stopped
+ * El estado 'error' puede ocurrir desde cualquier transición.
+ */
+export type EngineStatus = 'stopped' | 'pulling' | 'starting' | 'running' | 'stopping' | 'error';
+/**
+ * Información del estado actual de un motor con metadata adicional.
+ */
+export interface EngineState {
+    /** ID del motor */
+    readonly engineId: EngineId;
+    /** Estado actual */
+    readonly status: EngineStatus;
+    /** Mensaje descriptivo del estado (ej: "Descargando imagen...", "Puerto 5432 listo") */
+    readonly message?: string;
+    /** Timestamp de cuándo entró en este estado */
+    readonly since: Date;
+}
+/**
+ * Datos de conexión completos para un motor corriendo.
+ * Se genera después de que el motor arranca exitosamente.
+ */
+export interface ConnectionInfo {
+    /** Host para conectarse (típicamente "localhost") */
+    readonly host: string;
+    /** Puerto mapeado en el host */
+    readonly port: number;
+    /** Usuario de la BD */
+    readonly user: string;
+    /** Password de la BD */
+    readonly password: string;
+    /** Nombre de la BD */
+    readonly database: string;
+    /** Comando completo listo para copiar y pegar en la terminal */
+    readonly connectionCommand: string;
+}
+/**
+ * Resultado exitoso.
+ */
+export interface Success<T> {
+    readonly ok: true;
+    readonly value: T;
+}
+/**
+ * Resultado con error.
+ */
+export interface Failure<E> {
+    readonly ok: false;
+    readonly error: E;
+}
+/**
+ * Tipo Result para manejar errores esperados sin excepciones.
+ * Las funciones que pueden fallar de forma predecible devuelven Result<T, E>
+ * en vez de lanzar excepciones (ENGINEERING_STANDARDS.md §3).
+ *
+ * @example
+ * ```typescript
+ * function startEngine(id: EngineId): Promise<Result<ConnectionInfo, EngineError>> {
+ *   // ...
+ * }
+ *
+ * const result = await startEngine('postgres');
+ * if (result.ok) {
+ *   showConnectionInfo(result.value);
+ * } else {
+ *   showError(result.error.message);
+ * }
+ * ```
+ */
+export type Result<T, E = EngineError> = Success<T> | Failure<E>;
+/**
+ * Crea un Result exitoso.
+ */
+export declare function success<T>(value: T): Success<T>;
+/**
+ * Crea un Result con error.
+ */
+export declare function failure<E>(error: E): Failure<E>;
+/**
+ * Códigos de error conocidos del sistema.
+ * Cada código mapea a un tipo de error esperado y manejable.
+ */
+export type EngineErrorCode = 'DOCKER_NOT_RUNNING' | 'DOCKER_PULL_FAILED' | 'ENGINE_START_FAILED' | 'ENGINE_STOP_FAILED' | 'ENGINE_ALREADY_RUNNING' | 'PORT_IN_USE' | 'HEALTHCHECK_TIMEOUT' | 'UNKNOWN_ENGINE' | 'CONTAINER_ERROR';
+/**
+ * Error tipado del sistema de motores.
+ * Contiene un código para que el llamador pueda tomar decisiones
+ * programáticas sobre cómo manejar el error.
+ */
+export interface EngineError {
+    /** Código del error para manejo programático */
+    readonly code: EngineErrorCode;
+    /** Mensaje descriptivo para mostrar al usuario */
+    readonly message: string;
+    /** Error original si este error envuelve otro */
+    readonly cause?: Error;
+}
+/**
+ * Eventos emitidos por ContainerLifecycle que la UI puede observar.
+ */
+export interface LifecycleEvents {
+    statusChanged: (state: EngineState) => void;
+    engineStarted: (connectionInfo: ConnectionInfo) => void;
+    engineStopped: (engineId: EngineId) => void;
+    error: (error: EngineError) => void;
+    pullProgress: (progress: PullProgress) => void;
+}
+/**
+ * Progreso de descarga de la imagen Docker.
+ */
+export interface PullProgress {
+    /** Porcentaje de completitud (0-100), o undefined si no se puede determinar */
+    readonly percentage?: number;
+    /** Mensaje de estado del pull */
+    readonly status: string;
+}
+/**
+ * Configuración de la imagen Docker del laboratorio.
+ */
+export declare const DOCKER_IMAGE_CONFIG: {
+    /** Nombre de la imagen en Docker Hub */
+    readonly imageName: "hachimakidev/sql-engine-lab";
+    /** Tag de la imagen */
+    readonly imageTag: "latest";
+    /** Nombre del contenedor que crea la extensión */
+    readonly containerName: "sql-engine-lab";
+    /** Variables de entorno por defecto */
+    readonly defaultEnv: {
+        readonly LAB_USER: "labuser";
+        readonly LAB_PASSWORD: "labpassword";
+        readonly LAB_DATABASE: "labdb";
+    };
+};
+//# sourceMappingURL=engine.types.d.ts.map

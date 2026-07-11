@@ -13,12 +13,8 @@
  */
 
 import Dockerode from 'dockerode';
-import {
-  Result,
-  success,
-  failure,
-  PullProgress,
-} from '../engines/engine.types';
+import { resolveDockerOptions } from './dockerConfigResolver';
+import { Result, success, failure, PullProgress } from '../engines/engine.types';
 
 /**
  * Callback para reportar progreso de descarga de imagen.
@@ -42,7 +38,7 @@ export class DockerClient {
   private readonly docker: Dockerode;
 
   constructor(dockerodeInstance?: Dockerode) {
-    this.docker = dockerodeInstance ?? new Dockerode();
+    this.docker = dockerodeInstance ?? new Dockerode(resolveDockerOptions());
   }
 
   /**
@@ -57,8 +53,7 @@ export class DockerClient {
     } catch (error) {
       return failure({
         code: 'DOCKER_NOT_RUNNING',
-        message:
-          'Docker no está corriendo. Por favor, inicia Docker Desktop antes de continuar.',
+        message: 'Docker no está corriendo. Por favor, inicia Docker Desktop antes de continuar.',
         cause: error instanceof Error ? error : new Error(String(error)),
       });
     }
@@ -71,10 +66,7 @@ export class DockerClient {
    * @param onProgress - Callback para reportar progreso de descarga
    * @returns Result vacío si la descarga fue exitosa
    */
-  async pullImage(
-    imageName: string,
-    onProgress?: ProgressCallback,
-  ): Promise<Result<void>> {
+  async pullImage(imageName: string, onProgress?: ProgressCallback): Promise<Result<void>> {
     try {
       const stream = await this.docker.pull(imageName);
 
@@ -201,7 +193,10 @@ export class DockerClient {
     } catch (error) {
       // Detectar error de puerto en uso
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('port is already allocated') || errorMessage.includes('address already in use')) {
+      if (
+        errorMessage.includes('port is already allocated') ||
+        errorMessage.includes('address already in use')
+      ) {
         return failure({
           code: 'PORT_IN_USE',
           message: `El puerto ya está en uso. Cierra la aplicación que lo esté ocupando o cambia el puerto.`,
@@ -265,6 +260,24 @@ export class DockerClient {
       return info.State.Running;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Obtiene el estado del healthcheck del contenedor.
+   *
+   * @param containerName - Nombre del contenedor
+   * @returns El estado ('starting', 'healthy', 'unhealthy') o null si no tiene healthcheck o no existe.
+   */
+  async getContainerHealthStatus(containerName: string): Promise<'starting' | 'healthy' | 'unhealthy' | null> {
+    try {
+      const container = await this.getContainerByName(containerName);
+      if (!container) return null;
+      
+      const info = await container.inspect();
+      return (info.State as any).Health?.Status ?? null;
+    } catch {
+      return null;
     }
   }
 }

@@ -13,7 +13,7 @@
  */
 
 import * as vscode from 'vscode';
-import { EngineId, ConnectionInfo } from '../core/engines/engine.types';
+import { EngineId, ConnectionInfo, EngineState } from '../core/engines/engine.types';
 import { getAllEngines, getEngineById, isValidEngineId } from '../core/engines/registry';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { EngineTreeViewProvider } from './treeView';
@@ -90,10 +90,12 @@ export function registerCommands(
           },
           async (progress) => {
             progress.report({ message: 'Verificando Docker...' });
+            ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'starting', 'Verificando Docker...');
 
-            lifecycle.on('statusChanged', (state) => {
+            lifecycle.on('statusChanged', (state: EngineState) => {
               if (state.message) {
                 progress.report({ message: state.message });
+                ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, state.status, state.message);
               }
             });
 
@@ -194,6 +196,25 @@ export function registerCommands(
     vscode.commands.registerCommand('sqlEngineLab.refreshEngines', () => {
       treeProvider.refresh();
     }),
+
+    // ------------------------------------------------------------------
+    // Configurar Credenciales
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.configureCredentials', async () => {
+      const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+      
+      const newPassword = await vscode.window.showInputBox({
+        title: 'SQL Engine Lab: Configurar Contraseña Maestra',
+        prompt: 'Esta contraseña se usará tanto para el usuario estándar como para el administrador.',
+        value: config.get<string>('labPassword', 'labpassword'),
+        password: true,
+      });
+
+      if (newPassword !== undefined && newPassword.trim() !== '') {
+        await config.update('labPassword', newPassword, vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage('✓ Contraseña actualizada correctamente. ¡Listo para iniciar motores!');
+      }
+    }),
   ];
 
   return disposables;
@@ -202,17 +223,14 @@ export function registerCommands(
 /**
  * Muestra un QuickPick para seleccionar un motor cuando no se especificó uno.
  */
-async function promptEngineSelection(
-  lifecycle: ContainerLifecycle,
-): Promise<EngineId | undefined> {
+async function promptEngineSelection(lifecycle: ContainerLifecycle): Promise<EngineId | undefined> {
   const currentEngineId = lifecycle.getCurrentEngine();
   const engines = getAllEngines();
 
   const items = engines.map((engine) => ({
     label: engine.displayName,
     description: engine.description,
-    detail:
-      currentEngineId === engine.id ? '● Actualmente corriendo' : undefined,
+    detail: currentEngineId === engine.id ? '● Actualmente corriendo' : undefined,
     engineId: engine.id,
   }));
 

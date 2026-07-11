@@ -23,6 +23,7 @@ import {
   success,
   failure,
   DOCKER_IMAGE_CONFIG,
+  ConfigurationProvider,
 } from '../engines/engine.types';
 import { getEngineById } from '../engines/registry';
 import { DockerClient } from './dockerClient';
@@ -43,10 +44,12 @@ export class ContainerLifecycle extends EventEmitter {
   private currentEngineId: EngineId | null = null;
   private currentStatus: EngineStatus = 'stopped';
   private readonly dockerClient: DockerClient;
+  private readonly configProvider?: ConfigurationProvider;
 
-  constructor(dockerClient: DockerClient) {
+  constructor(dockerClient: DockerClient, configProvider?: ConfigurationProvider) {
     super();
     this.dockerClient = dockerClient;
+    this.configProvider = configProvider;
   }
 
   /**
@@ -109,31 +112,51 @@ export class ContainerLifecycle extends EventEmitter {
       }
     }
 
-    // Crear y arrancar contenedor
     this.updateStatus(engineId, 'starting', `Iniciando ${engine.displayName}...`);
 
-    const portBindings = this.buildPortBindings(engine);
-    const exposedPorts = this.buildExposedPorts(engine);
+    let allocatedPort = engine.defaultPort;
+    const maxRetries = 10;
+    let startResult;
+    
+    // Obtener credenciales del usuario
+    const config = this.configProvider ? this.configProvider.getConfig() : undefined;
+    const envUser = config?.labUser || engine.connectionTemplate.defaultUser || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
+    const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
+    const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
 
-    const startResult = await this.dockerClient.createAndStartContainer({
-      name: DOCKER_IMAGE_CONFIG.containerName,
-      image: fullImageName,
-      env: {
-        ENGINE: engine.dockerEnvValue,
-        LAB_USER: engine.connectionTemplate.defaultUser || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER,
-        LAB_PASSWORD:
-          engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,
-        LAB_DATABASE:
-          engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE,
-      },
-      portBindings,
-      exposedPorts,
-    });
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      allocatedPort = engine.defaultPort === 0 ? 0 : engine.defaultPort + attempt;
+      const portBindings = this.buildPortBindings(engine, allocatedPort);
+      const exposedPorts = this.buildExposedPorts(engine);
 
-    if (!startResult.ok) {
-      this.updateStatus(engineId, 'error', startResult.error.message);
-      this.emit('error', startResult.error);
-      return failure(startResult.error);
+      startResult = await this.dockerClient.createAndStartContainer({
+        name: DOCKER_IMAGE_CONFIG.containerName,
+        image: fullImageName,
+        env: {
+          ENGINE: engine.dockerEnvValue,
+          LAB_USER: envUser,
+          LAB_PASSWORD: envPassword,
+          LAB_DATABASE: envDatabase,
+        },
+        portBindings,
+        exposedPorts,
+      });
+
+      if (startResult.ok) {
+        break; // Éxito
+      }
+
+      if (startResult.error.code === 'PORT_IN_USE' && engine.defaultPort !== 0 && attempt < maxRetries) {
+        this.updateStatus(engineId, 'starting', `Puerto ${allocatedPort} ocupado. Probando ${allocatedPort + 1}...`);
+      } else {
+        break; // Otro error, o no hay más reintentos, o es SQLite
+      }
+    }
+
+    if (!startResult || !startResult.ok) {
+      this.updateStatus(engineId, 'error', startResult!.error.message);
+      this.emit('error', startResult!.error);
+      return failure(startResult!.error);
     }
 
     // Esperar healthcheck
@@ -154,15 +177,22 @@ export class ContainerLifecycle extends EventEmitter {
 
     const connectionDetails = buildConnectionDetails(engine, {
       host: 'localhost',
-      port: engine.defaultPort,
-    });
+      port: allocatedPort,
+    }, config);
 
     const connectionInfo: ConnectionInfo = {
       ...connectionDetails,
-      connectionCommand: buildConnectionCommand(engine, connectionDetails),
+      connectionCommand: buildConnectionCommand(engine, connectionDetails, false),
+      ...(engine.connectionTemplate.adminUser
+        ? { adminConnectionCommand: buildConnectionCommand(engine, connectionDetails, true) }
+        : {}),
     };
 
-    this.updateStatus(engineId, 'running', `${engine.displayName} listo en puerto ${engine.defaultPort}`);
+    this.updateStatus(
+      engineId,
+      'running',
+      `${engine.displayName} listo en puerto ${allocatedPort}`,
+    );
     this.emit('engineStarted', connectionInfo);
 
     return success(connectionInfo);
@@ -234,29 +264,42 @@ export class ContainerLifecycle extends EventEmitter {
         });
       }
 
-      // Verificar si el motor responde al healthcheck
-      // Para el MVP, confiamos en que si el contenedor sigue corriendo después de un tiempo razonable,
-      // el motor está listo (el healthcheck de Docker validará internamente)
+      // Verificar si el motor responde al healthcheck nativo de Docker
+      const healthStatus = await this.dockerClient.getContainerHealthStatus(
+        DOCKER_IMAGE_CONFIG.containerName,
+      );
+
+      if (healthStatus === 'healthy') {
+        return success(undefined);
+      } else if (healthStatus === 'unhealthy') {
+        return failure({
+          code: 'HEALTHCHECK_FAILED',
+          message: `El contenedor de ${engine.displayName} falló su healthcheck interno. Revisa los logs de Docker.`,
+        });
+      }
+
+      // Si no tiene healthcheck o no se pudo leer (ej. SQLite o iniciando),
+      // usamos un timeout mínimo de seguridad.
+      if (healthStatus === null) {
+        const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
+        if (Date.now() - startTime >= minimumWaitMs) {
+          const stillRunning = await this.dockerClient.isContainerRunning(
+            DOCKER_IMAGE_CONFIG.containerName,
+          );
+          if (stillRunning) {
+            return success(undefined);
+          }
+        }
+      }
+
       const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
       this.updateStatus(
         engine.id,
         'starting',
-        `Esperando ${engine.displayName}... (${elapsedSeconds}s)`,
+        `Esperando ${engine.displayName}... (${elapsedSeconds}s) [Status: ${healthStatus || 'N/A'}]`,
       );
 
       await this.sleep(pollIntervalMs);
-
-      // Heurística simple: si el contenedor lleva corriendo al menos X segundos, considerarlo listo
-      // El healthcheck de Docker validará internamente; aquí nos damos un margen mínimo
-      const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
-      if (Date.now() - startTime >= minimumWaitMs) {
-        const stillRunning = await this.dockerClient.isContainerRunning(
-          DOCKER_IMAGE_CONFIG.containerName,
-        );
-        if (stillRunning) {
-          return success(undefined);
-        }
-      }
     }
 
     return failure({
@@ -266,18 +309,16 @@ export class ContainerLifecycle extends EventEmitter {
   }
 
   /**
-   * Construye los port bindings para Docker según el motor.
+   * Construye los port bindings para Docker según el motor y el puerto objetivo.
    * SQLite no necesita port bindings (puerto 0).
    */
-  private buildPortBindings(
-    engine: EngineDefinition,
-  ): Record<string, Array<{ HostPort: string }>> {
+  private buildPortBindings(engine: EngineDefinition, targetPort: number): Record<string, Array<{ HostPort: string }>> {
     if (engine.defaultPort === 0) {
       return {};
     }
 
     return {
-      [`${engine.defaultPort}/tcp`]: [{ HostPort: String(engine.defaultPort) }],
+      [`${engine.defaultPort}/tcp`]: [{ HostPort: String(targetPort) }],
     };
   }
 
