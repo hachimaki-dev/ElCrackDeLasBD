@@ -4,8 +4,10 @@
  *
  * Punto de entrada de la extensión. Solo hace wiring (cablea) las piezas:
  * - Crea instancias de DockerClient, ContainerLifecycle
+ * - Crea el OutputChannel para diagnóstico
  * - Registra el Tree View
  * - Registra los comandos
+ * - Conecta eventos de diagnóstico al OutputChannel
  * - Configura los disposables para cleanup
  *
  * No contiene lógica propia — eso está en core/ y vscode/.
@@ -51,6 +53,8 @@ const dockerClient_1 = require("./core/docker/dockerClient");
 const containerLifecycle_1 = require("./core/docker/containerLifecycle");
 const treeView_1 = require("./vscode/treeView");
 const commands_1 = require("./vscode/commands");
+const configProvider_1 = require("./vscode/configProvider");
+const platformInfo_1 = require("./core/docker/platformInfo");
 /**
  * Activación de la extensión.
  * VS Code llama a esta función cuando se activa la extensión
@@ -59,9 +63,25 @@ const commands_1 = require("./vscode/commands");
  * @param context - Contexto de la extensión provisto por VS Code
  */
 function activate(context) {
+    // ---- Crear OutputChannel para diagnóstico ----
+    const outputChannel = vscode.window.createOutputChannel('SQL Engine Lab');
+    const platform = (0, platformInfo_1.detectPlatform)();
+    outputChannel.appendLine(`SQL Engine Laboratory activada`);
+    outputChannel.appendLine(`Plataforma: ${platform.displayString}`);
+    outputChannel.appendLine(`Timestamp: ${new Date().toISOString()}`);
+    outputChannel.appendLine('');
     // ---- Crear instancias de las piezas core ----
     const dockerClient = new dockerClient_1.DockerClient();
-    const lifecycle = new containerLifecycle_1.ContainerLifecycle(dockerClient);
+    const configProvider = new configProvider_1.VsCodeConfigurationProvider();
+    const lifecycle = new containerLifecycle_1.ContainerLifecycle(dockerClient, configProvider);
+    // ---- Conectar eventos de diagnóstico al OutputChannel ----
+    lifecycle.on('diagnosticLog', (message) => {
+        outputChannel.appendLine(message);
+    });
+    lifecycle.on('emulationWarning', (data) => {
+        outputChannel.appendLine(`⚠️ [EMULACIÓN] ${data.message}`);
+        void vscode.window.showWarningMessage(`SQL Engine Lab: ${data.message}`);
+    });
     // ---- Registrar Tree View ----
     const treeProvider = new treeView_1.EngineTreeViewProvider(lifecycle);
     const treeView = vscode.window.createTreeView('sqlEngineLab.engineList', {
@@ -69,10 +89,10 @@ function activate(context) {
         showCollapseAll: false,
     });
     // ---- Registrar comandos ----
-    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider);
+    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel);
     // ---- Agregar todos los disposables al contexto ----
     // VS Code los limpiará automáticamente al desactivar la extensión
-    context.subscriptions.push(treeView, treeProvider, ...commandDisposables, 
+    context.subscriptions.push(treeView, treeProvider, outputChannel, ...commandDisposables, 
     // Disposable para lifecycle (detener contenedor activo al desactivar)
     new vscode.Disposable(() => {
         void lifecycle.stopEngine();

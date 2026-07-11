@@ -75,6 +75,7 @@ export declare class DockerClient {
             HostPort: string;
         }>>;
         exposedPorts: Record<string, Record<string, never>>;
+        shmSize?: number;
     }): Promise<Result<Dockerode.Container>>;
     /**
      * Detiene y elimina un contenedor.
@@ -90,5 +91,12 @@ export declare class DockerClient {
      * @returns true si el contenedor existe y está corriendo
      */
     isContainerRunning(containerName: string): Promise<boolean>;
+    /**
+     * Obtiene el estado del healthcheck del contenedor.
+     *
+     * @param containerName - Nombre del contenedor
+     * @returns El estado ('starting', 'healthy', 'unhealthy') o null si no tiene healthcheck o no existe.
+     */
+    getContainerHealthStatus(containerName: string): Promise<'starting' | 'healthy' | 'unhealthy' | null>;
 }
 //# sourceMappingURL=dockerClient.d.ts.map

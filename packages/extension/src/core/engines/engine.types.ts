@@ -58,6 +58,8 @@ export interface EngineDefinition {
   readonly id: EngineId;
   /** Nombre para mostrar en la UI */
   readonly displayName: string;
+  /** Tamaño de memoria compartida (shm-size) en bytes necesario para el contenedor en Docker */
+  readonly dockerShmSize?: number;
   /** Descripción corta del motor */
   readonly description: string;
   /** Puerto por defecto del motor (0 para SQLite que no usa puerto) */
@@ -211,6 +213,7 @@ export type EngineErrorCode =
   | 'HEALTHCHECK_FAILED'
   | 'HEALTHCHECK_TIMEOUT'
   | 'UNKNOWN_ENGINE'
+  | 'WEAK_PASSWORD'
   | 'CONTAINER_ERROR';
 
 /**
@@ -269,7 +272,7 @@ export const DOCKER_IMAGE_CONFIG = {
   /** Variables de entorno por defecto */
   defaultEnv: {
     LAB_USER: 'labuser',
-    LAB_PASSWORD: 'labpassword',
+    LAB_PASSWORD: 'LabPassword123!',
     LAB_DATABASE: 'labdb',
   },
 } as const;

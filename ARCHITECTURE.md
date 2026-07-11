@@ -17,6 +17,8 @@ graph TB
         DCK["core/docker/dockerClient.ts<br/>Facade sobre dockerode"]
         LCY["core/docker/containerLifecycle.ts<br/>Ciclo de vida + EventEmitter"]
         CON["core/connection/connectionBuilder.ts<br/>Generador de comandos de conexión"]
+        PLT["core/docker/platformInfo.ts<br/>Detección de SO y Arch"]
+        DIA["core/docker/dockerDiagnostics.ts<br/>Sistema Doctor"]
     end
 
     subgraph "Docker"
@@ -29,8 +31,12 @@ graph TB
     UI --> CMD
     CMD --> LCY
     CMD --> CON
+    CMD --> DIA
     LCY --> DCK
     LCY --> REG
+    LCY --> PLT
+    DIA --> DCK
+    DIA --> PLT
     REG --> ENG
     DCK --> CTR
     CTR --> IMG

@@ -16,6 +16,8 @@ export interface ResolverEnv {
     fsExistsSync: (filePath: string) => boolean;
     fsReadFileSync: (filePath: string) => string;
     fsReaddirSync: (filePath: string) => string[];
+    /** Callback opcional para logging diagnóstico. Si se provee, el resolver reporta cada paso. */
+    onLog?: (message: string) => void;
 }
 /**
  * Resuelve las opciones de inicialización de Dockerode basándose en las

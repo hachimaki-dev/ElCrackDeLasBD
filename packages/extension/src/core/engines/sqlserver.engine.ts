@@ -22,10 +22,10 @@ export const sqlserverEngine: EngineDefinition = {
     command: 'sqlcmd',
     argsTemplate: '-S {host},{port} -U {user} -P {password} -d {database} -C',
     defaultUser: 'labuser',
-    defaultPassword: 'labpassword',
+    defaultPassword: 'LabPassword123!',
     defaultDatabase: 'labdb',
     adminUser: 'sa',
-    adminPassword: 'labpassword',
+    adminPassword: 'LabPassword123!',
     adminPasswordMessage: 'Misma que el usuario del laboratorio',
     testCommands: [
       "SELECT @@VERSION;",

@@ -40,6 +40,8 @@ export interface ResolverEnv {
   fsExistsSync: (filePath: string) => boolean;
   fsReadFileSync: (filePath: string) => string;
   fsReaddirSync: (filePath: string) => string[];
+  /** Callback opcional para logging diagnóstico. Si se provee, el resolver reporta cada paso. */
+  onLog?: (message: string) => void;
 }
 
 /**
@@ -63,12 +65,19 @@ const defaultEnv: ResolverEnv = {
  */
 export function resolveDockerOptions(overrides?: Partial<ResolverEnv>): Dockerode.DockerOptions {
   const resolvedEnv: ResolverEnv = { ...defaultEnv, ...overrides };
-  const { env, platform, homedir, fsExistsSync, fsReadFileSync, fsReaddirSync } = resolvedEnv;
+  const { env, platform, homedir, fsExistsSync, fsReadFileSync, fsReaddirSync, onLog } = resolvedEnv;
+  const log = onLog ?? (() => { /* no-op */ });
+
+  log(`Resolving Docker options for platform: ${platform}`);
 
   // 1. Respetar DOCKER_HOST si está definido en el entorno
   if (env.DOCKER_HOST) {
-    return parseDockerHost(env.DOCKER_HOST);
+    log(`DOCKER_HOST found: ${env.DOCKER_HOST}`);
+    const options = parseDockerHost(env.DOCKER_HOST);
+    log(`Resolved via DOCKER_HOST → ${JSON.stringify(options)}`);
+    return options;
   }
+  log('DOCKER_HOST not set, checking Docker contexts...');
 
   // 2. Intentar leer la configuración de contextos de Docker
   const configPath = path.join(homedir, '.docker', 'config.json');
@@ -76,33 +85,41 @@ export function resolveDockerOptions(overrides?: Partial<ResolverEnv>): Dockerod
     try {
       const config = JSON.parse(fsReadFileSync(configPath)) as DockerConfig;
       const currentContext = config.currentContext;
+      log(`Docker config.json found. Current context: '${currentContext ?? 'default'}'`);
 
       if (currentContext && currentContext !== 'default') {
         const metaDir = path.join(homedir, '.docker', 'contexts', 'meta');
         if (fsExistsSync(metaDir)) {
           const subdirs = fsReaddirSync(metaDir);
+          log(`Scanning ${subdirs.length} context(s) in ${metaDir}`);
           for (const subdir of subdirs) {
             const metaJsonPath = path.join(metaDir, subdir, 'meta.json');
             if (fsExistsSync(metaJsonPath)) {
               try {
                 const meta = JSON.parse(fsReadFileSync(metaJsonPath)) as DockerContextMeta;
                 if (meta.Name === currentContext && meta.Endpoints?.docker?.Host) {
-                  return parseDockerHost(meta.Endpoints.docker.Host);
+                  const options = parseDockerHost(meta.Endpoints.docker.Host);
+                  log(`Resolved via context '${currentContext}' → ${JSON.stringify(options)}`);
+                  return options;
                 }
               } catch {
-                // Ignorar error al parsear un meta.json específico y continuar
+                log(`Failed to parse ${metaJsonPath}, skipping`);
               }
             }
           }
         }
+        log(`Context '${currentContext}' not found in meta dir, falling back to defaults`);
       }
     } catch {
-      // Ignorar error de parsing de config.json
+      log('Failed to parse Docker config.json, falling back to defaults');
     }
+  } else {
+    log(`Docker config.json not found at ${configPath}`);
   }
 
   // 3. Fallback a rutas por defecto por plataforma
   if (platform === 'win32') {
+    log('Windows detected → using named pipe //./pipe/docker_engine');
     return { socketPath: '//./pipe/docker_engine' };
   }
 
@@ -114,13 +131,17 @@ export function resolveDockerOptions(overrides?: Partial<ResolverEnv>): Dockerod
     path.join(homedir, '.docker', 'desktop', 'docker.sock'),
   ];
 
+  log(`Trying ${candidates.length} socket candidates...`);
   for (const candidate of candidates) {
-    if (fsExistsSync(candidate)) {
+    const exists = fsExistsSync(candidate);
+    log(`  ${candidate} → ${exists ? 'EXISTS ✓' : 'not found'}`);
+    if (exists) {
       return { socketPath: candidate };
     }
   }
 
   // Por defecto, retornar el socket estándar de Unix
+  log('No socket found, falling back to /var/run/docker.sock');
   return { socketPath: '/var/run/docker.sock' };
 }
 

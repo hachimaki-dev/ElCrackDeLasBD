@@ -22,9 +22,16 @@ exports.sqliteEngine = {
         defaultUser: '',
         defaultPassword: '',
         defaultDatabase: 'labdb',
+        testCommands: [
+            ".version",
+            "CREATE TABLE test (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT);",
+            "INSERT INTO test (nombre) VALUES ('Hola Lab');",
+            "SELECT * FROM test;"
+        ],
     },
     // SQLite es instantáneo — no necesita healthcheck largo
     healthcheckTimeoutMs: 5_000,
+    startupSpeed: 'fast',
     iconId: 'file',
 };
 //# sourceMappingURL=sqlite.engine.js.map

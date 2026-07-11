@@ -20,14 +20,15 @@ export const oracleEngine: EngineDefinition = {
   description: 'Oracle Database Free 23ai — motor enterprise con licencia gratuita para desarrollo',
   defaultPort: 1521,
   dockerEnvValue: 'oracle',
+  dockerShmSize: 1073741824, // 1GB requerido por Oracle 23ai
   connectionTemplate: {
     command: 'sqlplus',
     argsTemplate: '{user}/{password}@{host}:{port}/FREEPDB1',
     defaultUser: 'labuser',
-    defaultPassword: 'labpassword',
+    defaultPassword: 'LabPassword123!',
     defaultDatabase: 'FREEPDB1',
     adminUser: 'sys as sysdba',
-    adminPassword: 'labpassword',
+    adminPassword: 'LabPassword123!',
     adminPasswordMessage: 'Misma que el usuario del laboratorio',
     testCommands: [
       "SELECT * FROM v$version;",

@@ -67,17 +67,20 @@ export LAB_DATABASE="${LAB_DATABASE:-labdb}"
 # ---- Crear directorios ----
 mkdir -p "$LOG_DIR" "$DATA_DIR" "/var/run/sql-engine-lab"
 
-# ---- Ejecutar script de inicialización del motor ----
-init_script="${ENGINES_DIR}/${ENGINE}/init.sh"
-
-if [[ ! -f "$init_script" ]]; then
-    log_error "Script de inicialización no encontrado: $init_script"
-    exit 1
+if [[ "$ENGINE" != "oracle" ]]; then
+    init_script="${ENGINES_DIR}/${ENGINE}/init.sh"
+    
+    if [[ ! -f "$init_script" ]]; then
+        log_error "Script de inicialización no encontrado: $init_script"
+        exit 1
+    fi
+    
+    log_info "Ejecutando inicialización de $ENGINE..."
+    bash "$init_script"
+    log_info "Inicialización de $ENGINE completada."
+else
+    log_info "Oracle Free: la inicialización se delega a runOracle.sh via supervisord."
 fi
-
-log_info "Ejecutando inicialización de $ENGINE..."
-bash "$init_script"
-log_info "Inicialización de $ENGINE completada."
 
 # ---- Crear healthcheck específico del motor ----
 create_healthcheck() {
@@ -112,7 +115,13 @@ EOF
         oracle)
             cat > "$hc_script" << EOF
 #!/bin/bash
-echo "SELECT 1 FROM DUAL;" | sqlplus -s "${LAB_USER}"/"${LAB_PASSWORD}"@localhost:1521/FREEPDB1
+sqlplus -s /nolog << SQLEOF
+WHENEVER SQLERROR EXIT FAILURE;
+WHENEVER OSERROR EXIT FAILURE;
+CONNECT "${LAB_USER}"/"${LAB_PASSWORD}"@localhost:1521/FREEPDB1
+SELECT 1 FROM DUAL;
+EXIT;
+SQLEOF
 EOF
             ;;
         sqlserver)

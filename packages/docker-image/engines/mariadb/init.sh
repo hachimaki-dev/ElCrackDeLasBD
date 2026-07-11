@@ -75,7 +75,39 @@ EOSQL
     
     log_info "MariaDB inicializado correctamente."
 else
-    log_info "Data directory de MariaDB ya existe. Saltando inicialización."
+    log_info "Data directory de MariaDB ya existe. Sincronizando contraseñas..."
+    
+    # Arrancar temporalmente
+    mariadbd --datadir="$MARIADB_DATA" \
+             --socket="$MARIADB_SOCKET" \
+             --port=3307 \
+             --bind-address=0.0.0.0 \
+             --user=mysql \
+             --skip-grant-tables &
+    MARIADB_PID=$!
+    
+    # Esperar a que MariaDB esté listo
+    for i in $(seq 1 30); do
+        if mariadb-admin ping -h 127.0.0.1 -P 3307 --socket="$MARIADB_SOCKET" &>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Sincronizar contraseñas
+    mariadb -u root --socket="$MARIADB_SOCKET" <<-EOSQL
+        FLUSH PRIVILEGES;
+        ALTER USER '${LAB_USER}'@'%' IDENTIFIED BY '${LAB_PASSWORD}';
+        ALTER USER '${LAB_USER}'@'localhost' IDENTIFIED BY '${LAB_PASSWORD}';
+        ALTER USER 'root'@'localhost' IDENTIFIED BY '${LAB_PASSWORD}';
+        FLUSH PRIVILEGES;
+EOSQL
+    
+    log_info "Contraseñas sincronizadas."
+    
+    # Detener el servidor temporal
+    mariadb-admin -u root --password="${LAB_PASSWORD}" --socket="$MARIADB_SOCKET" shutdown
+    wait $MARIADB_PID 2>/dev/null || true
 fi
 
 # ---- Asegurar permisos correctos ----

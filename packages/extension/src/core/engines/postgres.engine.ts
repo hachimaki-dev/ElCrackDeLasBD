@@ -18,7 +18,7 @@ export const postgresEngine: EngineDefinition = {
     command: 'psql',
     argsTemplate: '-h {host} -p {port} -U {user} -d {database}',
     defaultUser: 'labuser',
-    defaultPassword: 'labpassword',
+    defaultPassword: 'LabPassword123!',
     defaultDatabase: 'labdb',
     adminUser: 'postgres',
     adminPassword: DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,

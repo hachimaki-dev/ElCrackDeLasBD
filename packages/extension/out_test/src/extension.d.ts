@@ -3,8 +3,10 @@
  *
  * Punto de entrada de la extensión. Solo hace wiring (cablea) las piezas:
  * - Crea instancias de DockerClient, ContainerLifecycle
+ * - Crea el OutputChannel para diagnóstico
  * - Registra el Tree View
  * - Registra los comandos
+ * - Conecta eventos de diagnóstico al OutputChannel
  * - Configura los disposables para cleanup
  *
  * No contiene lógica propia — eso está en core/ y vscode/.

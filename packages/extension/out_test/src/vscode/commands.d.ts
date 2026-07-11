@@ -8,11 +8,14 @@
  * - sqlEngineLab.showConnectionInfo
  * - sqlEngineLab.copyConnectionCommand
  * - sqlEngineLab.refreshEngines
+ * - sqlEngineLab.configureCredentials
+ * - sqlEngineLab.showDiagnostics
  *
  * Maneja errores de forma explícita y visible (no silenciosa).
  */
 import * as vscode from 'vscode';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
+import { DockerClient } from '../core/docker/dockerClient';
 import { EngineTreeViewProvider } from './treeView';
 /**
  * Registra todos los comandos de la extensión en el contexto de VS Code.
@@ -23,5 +26,5 @@ import { EngineTreeViewProvider } from './treeView';
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider): vscode.Disposable[];
+export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider, dockerClient: DockerClient, outputChannel: vscode.OutputChannel): vscode.Disposable[];
 //# sourceMappingURL=commands.d.ts.map

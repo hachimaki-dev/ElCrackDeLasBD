@@ -75,7 +75,7 @@ suite('ConnectionBuilder', () => {
     const engine = getEngineById('postgres');
     assert.ok(engine);
 
-    const launchConfig = { user: 'admin', password: 'password123', database: 'proddb' };
+    const launchConfig = { labUser: 'admin', labPassword: 'password123', labDatabase: 'proddb' };
     const details = buildConnectionDetails(engine, { host: 'localhost', port: 5432 }, launchConfig);
     assert.strictEqual(details.user, 'admin');
     assert.strictEqual(details.password, 'password123');

@@ -11,8 +11,9 @@
  * Si se pide iniciar un motor mientras otro corre, se detiene el activo primero.
  */
 import { EventEmitter } from 'events';
-import { EngineId, EngineStatus, ConnectionInfo, Result } from '../engines/engine.types';
+import { EngineId, EngineStatus, ConnectionInfo, Result, ConfigurationProvider } from '../engines/engine.types';
 import { DockerClient } from './dockerClient';
+import { PlatformInfo } from './platformInfo';
 /**
  * Gestor del ciclo de vida de contenedores de motores SQL.
  * Implementa el patrón Observer via EventEmitter para desacoplar
@@ -23,12 +24,16 @@ import { DockerClient } from './dockerClient';
  * @fires engineStopped - Cuando un motor se detuvo
  * @fires error - Cuando ocurre un error en el ciclo de vida
  * @fires pullProgress - Cuando hay progreso de descarga de imagen
+ * @fires emulationWarning - Cuando un motor correrá bajo emulación en la plataforma actual
+ * @fires diagnosticLog - Log de diagnóstico para Output Channel
  */
 export declare class ContainerLifecycle extends EventEmitter {
     private currentEngineId;
     private currentStatus;
     private readonly dockerClient;
-    constructor(dockerClient: DockerClient);
+    private readonly configProvider?;
+    private readonly platform;
+    constructor(dockerClient: DockerClient, configProvider?: ConfigurationProvider);
     /**
      * Inicia un motor SQL, deteniendo cualquier otro motor activo primero.
      * Implementa la invariante de "un motor a la vez" (ADR 0001).
@@ -60,7 +65,7 @@ export declare class ContainerLifecycle extends EventEmitter {
      */
     private waitForHealthcheck;
     /**
-     * Construye los port bindings para Docker según el motor.
+     * Construye los port bindings para Docker según el motor y el puerto objetivo.
      * SQLite no necesita port bindings (puerto 0).
      */
     private buildPortBindings;
@@ -76,5 +81,13 @@ export declare class ContainerLifecycle extends EventEmitter {
      * Utility para esperar N milisegundos.
      */
     private sleep;
+    /**
+     * Emite un log diagnóstico que puede ser capturado por el Output Channel.
+     */
+    private emitLog;
+    /**
+     * Retorna la plataforma detectada (para uso en diagnósticos).
+     */
+    getPlatformInfo(): PlatformInfo;
 }
 //# sourceMappingURL=containerLifecycle.d.ts.map

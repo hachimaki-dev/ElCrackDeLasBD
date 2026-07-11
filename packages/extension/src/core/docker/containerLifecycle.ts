@@ -28,6 +28,7 @@ import {
 import { getEngineById } from '../engines/registry';
 import { DockerClient } from './dockerClient';
 import { buildConnectionCommand, buildConnectionDetails } from '../connection/connectionBuilder';
+import { detectPlatform, getEmulationWarning, PlatformInfo } from './platformInfo';
 
 /**
  * Gestor del ciclo de vida de contenedores de motores SQL.
@@ -39,17 +40,22 @@ import { buildConnectionCommand, buildConnectionDetails } from '../connection/co
  * @fires engineStopped - Cuando un motor se detuvo
  * @fires error - Cuando ocurre un error en el ciclo de vida
  * @fires pullProgress - Cuando hay progreso de descarga de imagen
+ * @fires emulationWarning - Cuando un motor correrá bajo emulación en la plataforma actual
+ * @fires diagnosticLog - Log de diagnóstico para Output Channel
  */
 export class ContainerLifecycle extends EventEmitter {
   private currentEngineId: EngineId | null = null;
   private currentStatus: EngineStatus = 'stopped';
   private readonly dockerClient: DockerClient;
   private readonly configProvider?: ConfigurationProvider;
+  private readonly platform: PlatformInfo;
 
   constructor(dockerClient: DockerClient, configProvider?: ConfigurationProvider) {
     super();
     this.dockerClient = dockerClient;
     this.configProvider = configProvider;
+    this.platform = detectPlatform();
+    this.emitLog(`Platform detected: ${this.platform.displayString}`);
   }
 
   /**
@@ -81,6 +87,13 @@ export class ContainerLifecycle extends EventEmitter {
       this.updateStatus(engineId, 'error', dockerCheck.error.message);
       this.emit('error', dockerCheck.error);
       return failure(dockerCheck.error);
+    }
+
+    // Emitir warning de emulación si aplica
+    const emulationWarning = getEmulationWarning(engineId, this.platform);
+    if (emulationWarning) {
+      this.emit('emulationWarning', { engineId, message: emulationWarning });
+      this.emitLog(`[EMULATION] ${emulationWarning}`);
     }
 
     // Detener motor activo si hay uno corriendo (invariante: un motor a la vez)
@@ -124,6 +137,24 @@ export class ContainerLifecycle extends EventEmitter {
     const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
     const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
 
+    // Validar complejidad de contraseña para motores estrictos
+    if (engine.id === 'oracle' || engine.id === 'sqlserver') {
+      const pwd = envPassword;
+      const hasUpper = /[A-Z]/.test(pwd);
+      const hasLower = /[a-z]/.test(pwd);
+      const hasNumber = /[0-9]/.test(pwd);
+      const hasSymbol = /[^A-Za-z0-9]/.test(pwd);
+      
+      const complexityCount = [hasUpper, hasLower, hasNumber, hasSymbol].filter(Boolean).length;
+      
+      if (pwd.length < 8 || complexityCount < 3) {
+        return failure({
+          code: 'WEAK_PASSWORD',
+          message: `El motor ${engine.displayName} requiere una contraseña fuerte (mínimo 8 caracteres, conteniendo al menos 3 de: mayúsculas, minúsculas, números, símbolos). Por favor modifícala con el comando "Configurar Credenciales".`,
+        });
+      }
+    }
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       allocatedPort = engine.defaultPort === 0 ? 0 : engine.defaultPort + attempt;
       const portBindings = this.buildPortBindings(engine, allocatedPort);
@@ -140,6 +171,7 @@ export class ContainerLifecycle extends EventEmitter {
         },
         portBindings,
         exposedPorts,
+        shmSize: engine.dockerShmSize,
       });
 
       if (startResult.ok) {
@@ -356,5 +388,19 @@ export class ContainerLifecycle extends EventEmitter {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Emite un log diagnóstico que puede ser capturado por el Output Channel.
+   */
+  private emitLog(message: string): void {
+    this.emit('diagnosticLog', `[ContainerLifecycle] ${message}`);
+  }
+
+  /**
+   * Retorna la plataforma detectada (para uso en diagnósticos).
+   */
+  getPlatformInfo(): PlatformInfo {
+    return this.platform;
   }
 }

@@ -18,7 +18,7 @@ export const mysqlEngine: EngineDefinition = {
     command: 'mysql',
     argsTemplate: '-h {host} -P {port} -u {user} -p{password} {database}',
     defaultUser: 'labuser',
-    defaultPassword: 'labpassword',
+    defaultPassword: 'LabPassword123!',
     defaultDatabase: 'labdb',
     adminUser: 'root',
     adminPasswordRequiresInput: true,

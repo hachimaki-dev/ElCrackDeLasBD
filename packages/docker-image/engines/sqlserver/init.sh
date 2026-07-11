@@ -85,7 +85,36 @@ EOSQL
     touch "$SQLSERVER_DATA/.initialized"
     log_info "SQL Server inicializado correctamente."
 else
-    log_info "SQL Server ya está inicializado. Saltando configuración inicial."
+    log_info "SQL Server ya está inicializado. Sincronizando contraseñas..."
+    
+    # Arrancar SQL Server temporalmente
+    export ACCEPT_EULA="Y"
+    export MSSQL_SA_PASSWORD="${LAB_PASSWORD}"
+    export MSSQL_PID="Developer"
+    export MSSQL_DATA_DIR="$SQLSERVER_DATA"
+    
+    /opt/mssql/bin/sqlservr &
+    MSSQL_PID_NUM=$!
+    
+    # Esperar a que SQL Server esté listo
+    for i in $(seq 1 60); do
+        if $SQLCMD -S localhost,1433 -U sa -P "${LAB_PASSWORD}" -Q "SELECT 1" -C -b &>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Sincronizar contraseña del usuario del laboratorio
+    $SQLCMD -S localhost,1433 -U sa -P "${LAB_PASSWORD}" -C -b <<-EOSQL
+        ALTER LOGIN [${LAB_USER}] WITH PASSWORD = '${LAB_PASSWORD}';
+        GO
+EOSQL
+    
+    log_info "Contraseñas sincronizadas."
+    
+    # Detener SQL Server
+    kill $MSSQL_PID_NUM
+    wait $MSSQL_PID_NUM 2>/dev/null || true
 fi
 
 log_info "Comando de conexión: sqlcmd -S localhost,1433 -U ${LAB_USER} -P ${LAB_PASSWORD} -d ${LAB_DATABASE} -C"

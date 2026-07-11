@@ -87,6 +87,12 @@
         "title": "Configurar Credenciales",
         "category": "SQL Engine Lab",
         "icon": "$(gear)"
+      },
+      {
+        "command": "sqlEngineLab.showDiagnostics",
+        "title": "Diagnóstico del Entorno (Doctor)",
+        "category": "SQL Engine Lab",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -130,7 +136,7 @@
         },
         "sqlEngineLab.credentials.labPassword": {
           "type": "string",
-          "default": "labpassword",
+          "default": "LabPassword123!",
           "description": "Contraseña estándar por defecto. En motores como SQL Server u Oracle, esta también es la contraseña del administrador."
         },
         "sqlEngineLab.credentials.labDatabase": {
@@ -144,9 +150,10 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "compile:test": "tsc -p ./tsconfig.test.json",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
-    "test": "node ./out/test/runTest.js",
+    "pretest": "npm run compile && npm run compile:test",
+    "test": "node ./out_test/test/runTest.js",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",

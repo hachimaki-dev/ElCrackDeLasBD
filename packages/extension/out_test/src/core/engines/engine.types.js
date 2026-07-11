@@ -34,9 +34,9 @@ function failure(error) {
  */
 exports.DOCKER_IMAGE_CONFIG = {
     /** Nombre de la imagen en Docker Hub */
-    imageName: 'hachimakidev/sql-engine-lab',
+    imageName: 'sql-engine-lab',
     /** Tag de la imagen */
-    imageTag: 'latest',
+    imageTag: 'dev',
     /** Nombre del contenedor que crea la extensión */
     containerName: 'sql-engine-lab',
     /** Variables de entorno por defecto */

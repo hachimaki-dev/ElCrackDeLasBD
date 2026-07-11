@@ -160,14 +160,18 @@ class DockerClient {
                 await existing.remove();
             }
             const envArray = Object.entries(options.env).map(([key, value]) => `${key}=${value}`);
+            const hostConfig = {
+                PortBindings: options.portBindings,
+            };
+            if (options.shmSize) {
+                hostConfig.ShmSize = options.shmSize;
+            }
             const container = await this.docker.createContainer({
                 name: options.name,
                 Image: options.image,
                 Env: envArray,
                 ExposedPorts: options.exposedPorts,
-                HostConfig: {
-                    PortBindings: options.portBindings,
-                },
+                HostConfig: hostConfig,
             });
             await container.start();
             return (0, engine_types_1.success)(container);
@@ -237,6 +241,24 @@ class DockerClient {
         }
         catch {
             return false;
+        }
+    }
+    /**
+     * Obtiene el estado del healthcheck del contenedor.
+     *
+     * @param containerName - Nombre del contenedor
+     * @returns El estado ('starting', 'healthy', 'unhealthy') o null si no tiene healthcheck o no existe.
+     */
+    async getContainerHealthStatus(containerName) {
+        try {
+            const container = await this.getContainerByName(containerName);
+            if (!container)
+                return null;
+            const info = await container.inspect();
+            return info.State.Health?.Status ?? null;
+        }
+        catch {
+            return null;
         }
     }
 }

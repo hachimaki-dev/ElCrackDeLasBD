@@ -1,35 +1,22 @@
 /**
  * SQL Engine Laboratory — Connection Panel Webview
  *
- * Webview panel que muestra los datos de conexión cuando un motor está corriendo:
- * - Host, puerto, usuario, password
- * - Comando de conexión completo listo para copiar
- * - Botón "Copiar comando" con feedback visual
- *
- * El panel se muestra automáticamente cuando un motor arranca exitosamente.
+ * Webview panel rediseñado con tabs para Estándar/Admin, soporte
+ * para estado de carga (loading) y comandos de prueba.
  */
 import * as vscode from 'vscode';
-import { ConnectionInfo, EngineDefinition } from '../core/engines/engine.types';
-/**
- * Panel Webview que muestra información de conexión de un motor SQL activo.
- * Solo puede existir una instancia a la vez (singleton por sesión de extensión).
- */
+import { ConnectionInfo, EngineDefinition, EngineStatus } from '../core/engines/engine.types';
 export declare class ConnectionPanel {
     private static currentPanel;
     private readonly panel;
+    private currentEngine;
+    private currentInfo?;
+    private currentStatus?;
+    private loadingMessage?;
     private constructor();
-    /**
-     * Crea o revela el panel de conexión.
-     * Si ya existe, lo actualiza con los nuevos datos.
-     *
-     * @param extensionUri - URI de la extensión para resolución de recursos
-     * @param engine - Definición del motor activo
-     * @param connectionInfo - Datos de conexión del motor
-     */
     static createOrReveal(extensionUri: vscode.Uri, engine: EngineDefinition, connectionInfo: ConnectionInfo): void;
-    /**
-     * Cierra el panel si está abierto.
-     */
+    static createOrRevealLoading(extensionUri: vscode.Uri, engine: EngineDefinition, status: EngineStatus, message?: string): void;
+    private static show;
     static dispose(): void;
     private update;
     private buildHtml;

@@ -20,8 +20,18 @@ exports.mysqlEngine = {
         defaultUser: 'labuser',
         defaultPassword: 'labpassword',
         defaultDatabase: 'labdb',
+        adminUser: 'root',
+        adminPasswordRequiresInput: true,
+        adminPasswordMessage: 'Sin contraseña por defecto en localhost',
+        testCommands: [
+            'SELECT VERSION();',
+            'CREATE TABLE test (id INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(50));',
+            "INSERT INTO test (nombre) VALUES ('Hola Lab');",
+            'SELECT * FROM test;'
+        ],
     },
-    healthcheckTimeoutMs: 45_000,
+    healthcheckTimeoutMs: 20000,
+    startupSpeed: 'fast',
     iconId: 'database',
 };
 //# sourceMappingURL=mysql.engine.js.map

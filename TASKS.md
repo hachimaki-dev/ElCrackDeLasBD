@@ -64,3 +64,6 @@ _(nada)_
 - [x] Detección automática de Docker socket y SO (agente: antigravity, completado 2026-07-10)
 - [x] Rediseño completo de UX/UI del Webview con pestañas, estado de carga y comandos de prueba (agente: antigravity, completado 2026-07-10)
 - [x] Resiliencia de puertos dinámicos y configuración de credenciales visual con InputBox (agente: antigravity, completado 2026-07-10)
+- [x] Soporte cross-platform: detección de SO, estrategia Docker adaptativa, logging diagnóstico (agente: antigravity, finalizado 2026-07-11)
+- [x] Sincronización de contraseñas persistentes y resolución de timeouts de arranque para todos los motores, delegando la inicialización de Oracle al script nativo de gvenzl (agente: antigravity, completado 2026-07-11)
+- [x] Reestructuración multi-stage dinámica (`TARGETARCH`) del Dockerfile para habilitar soporte nativo ARM64 de SQL Server usando Azure SQL Edge, y corrección de entrypoint de Oracle Free (agente: antigravity, completado 2026-07-11)

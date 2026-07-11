@@ -29,6 +29,16 @@ export interface ConnectionTemplate {
     readonly defaultPassword: string;
     /** Base de datos por defecto del laboratorio */
     readonly defaultDatabase: string;
+    /** Usuario administrador por defecto del motor (ej: sa, root, postgres) */
+    readonly adminUser?: string;
+    /** Password del usuario administrador (si aplica) */
+    readonly adminPassword?: string;
+    /** Si es true, el motor no tiene password de admin por defecto (ej. MySQL local) o requiere input manual. Sirve para mostrar un mensaje claro en la UI. */
+    readonly adminPasswordRequiresInput?: boolean;
+    /** Mensaje personalizado para mostrar al usuario sobre la password de admin (ej. 'Sin contraseña por defecto') */
+    readonly adminPasswordMessage?: string;
+    /** Comandos de prueba de ejemplo (ej: 'SELECT 1;', 'CREATE TABLE...') */
+    readonly testCommands?: string[];
 }
 /**
  * Definición completa de un motor SQL.
@@ -51,6 +61,8 @@ export interface EngineDefinition {
     readonly connectionTemplate: ConnectionTemplate;
     /** Timeout en milisegundos para el healthcheck (Oracle necesita más que PostgreSQL) */
     readonly healthcheckTimeoutMs: number;
+    /** Indicador de velocidad de inicio esperado, útil para dar feedback en la UI */
+    readonly startupSpeed: 'fast' | 'slow';
     /** Icono para la UI (codicon de VS Code) */
     readonly iconId: string;
 }
@@ -90,6 +102,21 @@ export interface ConnectionInfo {
     readonly database: string;
     /** Comando completo listo para copiar y pegar en la terminal */
     readonly connectionCommand: string;
+    /** Comando de conexión como administrador (si aplica) */
+    readonly adminConnectionCommand?: string;
+}
+/**
+ * Configuración de lanzamiento de un motor.
+ * Permite al usuario personalizar las credenciales con las que se crea
+ * el contenedor Docker. Si no se especifica, se usan los defaults.
+ */
+export interface LaunchConfig {
+    /** Usuario personalizado (default: labuser) */
+    readonly user?: string;
+    /** Password personalizada (default: labpassword) */
+    readonly password?: string;
+    /** Nombre de la base de datos (default: labdb) */
+    readonly database?: string;
 }
 /**
  * Resultado exitoso.
@@ -137,7 +164,7 @@ export declare function failure<E>(error: E): Failure<E>;
  * Códigos de error conocidos del sistema.
  * Cada código mapea a un tipo de error esperado y manejable.
  */
-export type EngineErrorCode = 'DOCKER_NOT_RUNNING' | 'DOCKER_PULL_FAILED' | 'ENGINE_START_FAILED' | 'ENGINE_STOP_FAILED' | 'ENGINE_ALREADY_RUNNING' | 'PORT_IN_USE' | 'HEALTHCHECK_TIMEOUT' | 'UNKNOWN_ENGINE' | 'CONTAINER_ERROR';
+export type EngineErrorCode = 'DOCKER_NOT_RUNNING' | 'DOCKER_PULL_FAILED' | 'ENGINE_START_FAILED' | 'ENGINE_STOP_FAILED' | 'ENGINE_ALREADY_RUNNING' | 'PORT_IN_USE' | 'HEALTHCHECK_FAILED' | 'HEALTHCHECK_TIMEOUT' | 'UNKNOWN_ENGINE' | 'CONTAINER_ERROR';
 /**
  * Error tipado del sistema de motores.
  * Contiene un código para que el llamador pueda tomar decisiones
@@ -175,9 +202,9 @@ export interface PullProgress {
  */
 export declare const DOCKER_IMAGE_CONFIG: {
     /** Nombre de la imagen en Docker Hub */
-    readonly imageName: "hachimakidev/sql-engine-lab";
+    readonly imageName: "sql-engine-lab";
     /** Tag de la imagen */
-    readonly imageTag: "latest";
+    readonly imageTag: "dev";
     /** Nombre del contenedor que crea la extensión */
     readonly containerName: "sql-engine-lab";
     /** Variables de entorno por defecto */
@@ -187,4 +214,18 @@ export declare const DOCKER_IMAGE_CONFIG: {
         readonly LAB_DATABASE: "labdb";
     };
 };
+/**
+ * Configuración de credenciales definida por el usuario.
+ */
+export interface EngineConfig {
+    readonly labUser: string;
+    readonly labPassword: string;
+    readonly labDatabase: string;
+}
+/**
+ * Interfaz para proveer configuración al Core sin acoplarlo a VS Code.
+ */
+export interface ConfigurationProvider {
+    getConfig(): EngineConfig;
+}
 //# sourceMappingURL=engine.types.d.ts.map

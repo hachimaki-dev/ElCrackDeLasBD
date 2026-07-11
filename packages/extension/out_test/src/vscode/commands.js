@@ -9,6 +9,8 @@
  * - sqlEngineLab.showConnectionInfo
  * - sqlEngineLab.copyConnectionCommand
  * - sqlEngineLab.refreshEngines
+ * - sqlEngineLab.configureCredentials
+ * - sqlEngineLab.showDiagnostics
  *
  * Maneja errores de forma explícita y visible (no silenciosa).
  */
@@ -49,6 +51,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const vscode = __importStar(require("vscode"));
 const registry_1 = require("../core/engines/registry");
+const dockerDiagnostics_1 = require("../core/docker/dockerDiagnostics");
 const connectionPanel_1 = require("./connectionPanel");
 /**
  * Registra todos los comandos de la extensión en el contexto de VS Code.
@@ -59,7 +62,7 @@ const connectionPanel_1 = require("./connectionPanel");
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-function registerCommands(context, lifecycle, treeProvider) {
+function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel) {
     // Guardar la última conexión activa para mostrarla en el panel
     let activeConnectionInfo;
     // Escuchar cuando un motor arranca para guardar la info de conexión
@@ -104,9 +107,11 @@ function registerCommands(context, lifecycle, treeProvider) {
                 cancellable: false,
             }, async (progress) => {
                 progress.report({ message: 'Verificando Docker...' });
+                connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'starting', 'Verificando Docker...');
                 lifecycle.on('statusChanged', (state) => {
                     if (state.message) {
                         progress.report({ message: state.message });
+                        connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, state.status, state.message);
                     }
                 });
                 const result = await lifecycle.startEngine(engineId);
@@ -178,6 +183,31 @@ function registerCommands(context, lifecycle, treeProvider) {
         // ------------------------------------------------------------------
         vscode.commands.registerCommand('sqlEngineLab.refreshEngines', () => {
             treeProvider.refresh();
+        }),
+        // ------------------------------------------------------------------
+        // Configurar Credenciales
+        // ------------------------------------------------------------------
+        vscode.commands.registerCommand('sqlEngineLab.configureCredentials', async () => {
+            const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+            const newPassword = await vscode.window.showInputBox({
+                title: 'SQL Engine Lab: Configurar Contraseña Maestra',
+                prompt: 'Esta contraseña se usará tanto para el usuario estándar como para el administrador.',
+                value: config.get('labPassword', 'labpassword'),
+                password: true,
+            });
+            if (newPassword !== undefined && newPassword.trim() !== '') {
+                await config.update('labPassword', newPassword, vscode.ConfigurationTarget.Global);
+                void vscode.window.showInformationMessage('✓ Contraseña actualizada correctamente. ¡Listo para iniciar motores!');
+            }
+        }),
+        // ------------------------------------------------------------------
+        // Diagnóstico del entorno (Doctor)
+        // ------------------------------------------------------------------
+        vscode.commands.registerCommand('sqlEngineLab.showDiagnostics', async () => {
+            outputChannel.show(true);
+            outputChannel.appendLine('Ejecutando diagnóstico del entorno...');
+            const report = await (0, dockerDiagnostics_1.runDoctorFormatted)(dockerClient);
+            outputChannel.appendLine(report);
         }),
     ];
     return disposables;

@@ -202,4 +202,72 @@ suite('Docker Config Resolver', () => {
     const options = resolveDockerOptions(mockEnv);
     assert.deepStrictEqual(options, { socketPath: '/var/run/docker.sock' });
   });
+
+  test('resuelve el socket de macOS Docker Desktop con contexto desktop-linux (caso real Mac M1)', () => {
+    const homedir = '/Users/hachimaki';
+    const configPath = path.join(homedir, '.docker', 'config.json');
+    const metaDir = path.join(homedir, '.docker', 'contexts', 'meta');
+    const contextHash = 'fe9c6bd7a66301f49ca9b6a70b217107';
+    const metaJsonPath = path.join(metaDir, contextHash, 'meta.json');
+
+    const files: Record<string, string> = {
+      [configPath]: JSON.stringify({ currentContext: 'desktop-linux' }),
+      [metaJsonPath]: JSON.stringify({
+        Name: 'desktop-linux',
+        Endpoints: {
+          docker: {
+            Host: 'unix:///Users/hachimaki/.docker/run/docker.sock',
+          },
+        },
+      }),
+    };
+
+    const directories: Record<string, string[]> = {
+      [metaDir]: [contextHash],
+    };
+
+    const mockEnv = createMockEnv({
+      platform: 'darwin',
+      homedir,
+      fsExistsSync: (p) => p in files || p in directories,
+      fsReadFileSync: (p) => files[p],
+      fsReaddirSync: (p) => directories[p],
+    });
+
+    const options = resolveDockerOptions(mockEnv);
+    assert.deepStrictEqual(options, {
+      socketPath: '/Users/hachimaki/.docker/run/docker.sock',
+    });
+  });
+
+  test('el callback onLog recibe mensajes de resolución', () => {
+    const logs: string[] = [];
+    const mockEnv = createMockEnv({
+      platform: 'linux',
+      fsExistsSync: () => false,
+      onLog: (msg: string) => logs.push(msg),
+    });
+
+    resolveDockerOptions(mockEnv);
+
+    assert.ok(logs.length > 0, 'Debería haber al menos un mensaje de log');
+    assert.ok(
+      logs.some(log => log.includes('platform')),
+      'Debería mencionar la plataforma',
+    );
+    assert.ok(
+      logs.some(log => log.includes('candidates') || log.includes('socket')),
+      'Debería mencionar la búsqueda de sockets',
+    );
+  });
+
+  test('el callback onLog no falla si no se provee', () => {
+    const mockEnv = createMockEnv({
+      platform: 'linux',
+      fsExistsSync: () => false,
+    });
+
+    // No debería lanzar error aunque no haya onLog
+    assert.doesNotThrow(() => resolveDockerOptions(mockEnv));
+  });
 });

@@ -58,7 +58,7 @@ export function buildConnectionCommand(
   const database =
     'database' in connectionInfo ? connectionInfo.database : template.defaultDatabase;
 
-  const host = engine.id === 'mysql' || engine.id === 'mariadb' ? '127.0.0.1' : 'localhost';
+  const host = '127.0.0.1';
 
   // El comando siempre se ejecuta dentro del contenedor vía docker exec,
   // por lo que SIEMPRE debemos apuntar al puerto interno por defecto del motor,

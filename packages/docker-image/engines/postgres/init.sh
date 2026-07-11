@@ -75,7 +75,29 @@ EOSQL
     
     log_info "PostgreSQL inicializado correctamente."
 else
-    log_info "Data directory de PostgreSQL ya existe. Saltando inicialización."
+    log_info "Data directory de PostgreSQL ya existe. Sincronizando contraseñas..."
+    
+    # Arrancar temporalmente para sincronizar la contraseña
+    gosu postgres "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_DATA/init.log" start
+    
+    # Esperar a que PostgreSQL esté listo
+    for i in $(seq 1 30); do
+        if gosu postgres "$PG_BIN/pg_isready" -p 5432 &>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Actualizar la contraseña del usuario del laboratorio y postgres
+    gosu postgres "$PG_BIN/psql" -p 5432 <<-EOSQL
+        ALTER USER ${LAB_USER} WITH PASSWORD '${LAB_PASSWORD}';
+        ALTER USER postgres WITH PASSWORD '${LAB_PASSWORD}';
+EOSQL
+    
+    log_info "Contraseñas sincronizadas."
+    
+    # Detener el servidor temporal
+    gosu postgres "$PG_BIN/pg_ctl" -D "$PG_DATA" stop -m fast
 fi
 
 # ---- Asegurar permisos correctos ----

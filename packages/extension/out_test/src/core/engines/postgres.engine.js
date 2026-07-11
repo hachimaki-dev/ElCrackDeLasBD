@@ -8,6 +8,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.postgresEngine = void 0;
+const engine_types_1 = require("./engine.types");
 exports.postgresEngine = {
     id: 'postgres',
     displayName: 'PostgreSQL',
@@ -20,8 +21,18 @@ exports.postgresEngine = {
         defaultUser: 'labuser',
         defaultPassword: 'labpassword',
         defaultDatabase: 'labdb',
+        adminUser: 'postgres',
+        adminPassword: engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD,
+        adminPasswordMessage: 'Misma que el usuario del laboratorio',
+        testCommands: [
+            'SELECT version();',
+            'CREATE TABLE test (id serial PRIMARY KEY, nombre varchar(50));',
+            "INSERT INTO test (nombre) VALUES ('Hola Lab');",
+            'SELECT * FROM test;'
+        ],
     },
-    healthcheckTimeoutMs: 30_000,
+    healthcheckTimeoutMs: 15000,
+    startupSpeed: 'fast',
     iconId: 'database',
 };
 //# sourceMappingURL=postgres.engine.js.map

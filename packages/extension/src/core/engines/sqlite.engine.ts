@@ -30,7 +30,7 @@ export const sqliteEngine: EngineDefinition = {
     ],
   },
   // SQLite es instantáneo — no necesita healthcheck largo
-  healthcheckTimeoutMs: 5_000,
+  healthcheckTimeoutMs: 15_000,
   startupSpeed: 'fast',
   iconId: 'file',
 };

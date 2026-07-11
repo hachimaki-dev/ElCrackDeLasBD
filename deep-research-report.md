@@ -197,3 +197,1094 @@ En términos **técnicos**, Oracle y PostgreSQL son extremadamente sofisticados 
 Cada motor tiene su nicho: no hay “mejor absoluto”. Oracle domina grandes empresas, PostgreSQL destaca por extensibilidad, SQL Server por integración, MySQL/MariaDB por web y bajos costos, y SQLite por embedido. La elección óptima dependerá siempre del caso específico.
 
 **Fuentes:** Documentación oficial y análisis de referencia.
+
+
+# Resumen ejecutivo
+
+Este informe presenta los fundamentos y detalles avanzados del concepto **`CREATE DATABASE`** en SQL, comparando exhaustivamente su implementación en Oracle Database, Microsoft SQL Server, PostgreSQL, MySQL, MariaDB y SQLite. Siguiendo la estructura solicitada, cada aspecto técnico se explica desde cero hasta nivel experto, referenciando exclusivamente documentación oficial (ANSI/ISO, manuales de Oracle, Microsoft Learn, PostgreSQL, MySQL/MariaDB, SQLite). Se prioriza la precisión terminológica y la claridad pedagógica para orientar a modelos de IA avanzados y herramientas como extensiones de VS Code o sistemas RAG. 
+
+- **Organización por concepto:** El informe no está separado por motor sino por categorías conceptuales (DDL, DML, etc.), abordando tras cada título común las particularidades de cada motor.
+- **Consistencia y profundidad:** Cada sección sigue la plantilla exacta proporcionada, sin omitir ninguna subsección. Se corrigen errores del documento base y se añaden detalles faltantes (por ejemplo, la implementación de SQLite o los privilegios específicos por motor). 
+- **Fuentes oficiales:** Se citan solo documentos oficiales (por ejemplo, la guía SQL Reference de Oracle, manuales de Microsoft, PostgreSQL, MySQL/MariaDB, SQLite Quickstart, etc.). Esto garantiza precisión máxima y coherencia con la “Fuente de la Verdad” deseada.
+- **Orientación IA:** Además de textos explicativos, cada concepto incluye metadatos estructurados (campos predefinidos), reglas de LSP (`snippet_prefixes`, `hover_information`, etc.) y tokens sintácticos/semánticos, de modo que otra IA o extensión de código pueda interpretar y utilizar el contenido para completado automático, linting, traducción de SQL, etc.
+- **Diagrams y tablas:** Se incorporan diagramas con mermaid (por ejemplo, un diagrama ER de los objetos de base de datos) y tablas comparativas para facilitar la comprensión de diferencias entre motores. 
+
+En resumen, este documento se diseñó para servir como **referencia definitiva** y “source of truth” sobre conceptos clave de SQL en seis sistemas de bases de datos, con un nivel de detalle técnico similar o superior a manuales internos de ingeniería.
+
+---
+
+# CREATE DATABASE
+
+## Metadata
+
+- **ID único:** `CREATE_DATABASE`
+- **Categoría:** DDL  
+- **Subcategoría:** Gestión de Bases de Datos  
+- **Nivel:** Intermedio/Avanzado  
+- **Motores compatibles:** Oracle, SQL Server, PostgreSQL, MySQL, MariaDB, SQLite  
+- **Versión mínima:** Oracle 8i, SQL Server 7.0, PostgreSQL 7.0, MySQL 5.0, MariaDB 5.3, SQLite 3.x  
+- **Versiones con cambios importantes:** Oracle 12c (introdujo bases pluggable), SQL Server 2016+ (niveles de compatibilidad Azure), PostgreSQL 9.x (ajustes de encoding/locale), MySQL 8.0 (cambios en diccionario de datos), MariaDB 10.5 (opción COMMENT y OR REPLACE), SQLite 3 (solo filestorage).  
+- **Temas relacionados:** `ALTER DATABASE`, `DROP DATABASE`, `CREATE SCHEMA`, `TABLESPACE`, `FILEGROUP`, `ATTACH DATABASE` (SQLite), Gestión de instancias y clúster, diccionario de datos.  
+- **Norma ANSI relacionada:** *Ninguna:* El estándar ISO/IEC 9075 (SQL) no define una instrucción `CREATE DATABASE`; los “catálogos” (equivalentes a bases de datos) son gestión interna de cada SGBD. Por ello, las diferencias entre motores son significativas.  
+
+---
+
+## Concepto
+
+`CREATE DATABASE` es una instrucción de **Lenguaje de Definición de Datos (DDL)** que crea un nuevo contenedor lógico para almacenar objetos de base de datos. Sirve para inicializar un nuevo espacio de almacenamiento de datos (base de datos) dentro de una instancia o clúster de un sistema de gestión de bases de datos relacional. El objetivo principal es **resolver la necesidad de administrar múltiples bases de datos aisladas** en un mismo servidor (o en arquitecturas multi-tenant), asignando recursos de disco y metadatos iniciales. 
+
+Por ejemplo, en Oracle esta sentencia “prepara una base de datos para uso inicial” borrando cualquier dato preexistente en los archivos especificados y montando la nueva base en memoria. En MySQL/MariaDB simplemente crea un directorio bajo el directorio de datos (data directory) que contendrá los archivos de tablas. SQL Server al ejecutar `CREATE DATABASE` inicializa archivos de datos (`.mdf`, `.ndf`) y de registro (`.ldf`) en disco según la sintaxis dada. PostgreSQL clona la base de datos plantilla (`template1`) para crear la nueva.
+
+Cada motor maneja internamente la operación de forma distinta, pero conceptualmente se garantiza que, tras su ejecución, exista una base de datos vacía con los esquemas y objetos del sistema adecuados. Esta instrucción existe porque los sistemas de bases de datos relacionales emergieron en los años 70/80 con la necesidad de gestionar múltiples bases de datos; antes de los comandos internos, se usaban utilidades externas. La evolución ha ido en la integración en el SQL estándar de cada motor, añadiendo características: por ejemplo, Oracle 12c introdujo el concepto de **PDB (Pluggable Database)** que requiere la cláusula `ENABLE PLUGGABLE DATABASE`; MariaDB añadió `OR REPLACE` y `COMMENT`. 
+
+**Por qué existe:** Para gestionar la creación controlada de nuevas bases de datos dentro de un servidor, aplicando políticas de seguridad, asignación de recursos (tamaño, collation, tablespace/filegroup) y dejando registro en metadatos.
+
+**Historia y evolución resumida:** Desde la primera versión de Oracle (después del paper original de E.F. Codd), cada SGBD introdujo su mecanismo: Oracle manejaba bases a nivel de instancia, MS SQL Server las identifica por nombre y archivos separados, MySQL usa carpetas en el filesystem, PostgreSQL clonaba bases plantillas, SQLite usa archivos independientes. Con el tiempo se añadieron opciones (encoding, ubicaciones, plantillas, replicación con `FOR ATTACH`) y cada sistema creó su propio modelo de permisos y metadatos.
+
+---
+
+## Semántica
+
+Conceptualmente, `CREATE DATABASE` **instancia** un nuevo espacio lógico de base de datos. Lo que ocurre por motor:
+
+- **Oracle:** Se crean o reutilizan archivos de datos (`DATAFILE`), archivos de control y log (redo/undo), se inicializan las estructuras del diccionario de datos (tablespaces SYSTEM, SYSAUX), se monta la base en memoria (estado `MOUNT`) y luego se abre para uso normal. Garantiza que existe un "esqueleto" de base de datos con tablas y vistas de sistema vacías. No garantiza migrar usuarios/privilegios (los usuarios son instancia-globales) ni copiar datos existentes; de hecho, si se aplica sobre una base existente, **elimina todos los datos previos** en los archivos especificados.
+
+- **SQL Server:** Se crea un nuevo archivo de datos primario (PRIMARY) y opcionalmente archivos adicionales y de log, tal como se especifique. El motor asigna páginas iniciales (cabeceras, mapas de alocación, página de arranque) en cada archivo. El efecto garantizado es la existencia de un nuevo ID de base de datos en el catálogo `sys.databases` y de un nuevo archivo físico en el disco. No garantiza tener usuarios/roles además del propietario; las configuraciones de instancia preexistentes (como inicios de sesión) no se transfieren automáticamente.
+
+- **PostgreSQL:** Crea la base clonando `template1` (o el template que se indique). Esto implica copiar al nuevo tablespace todos los archivos del template, ya sea *file copy* (copiar directorios en el sistema de archivos) o *WAL log* (escribir bloques al WAL). Durante esta operación, `template1` queda bloqueada (no se admiten conexiones hasta terminar), garantizando consistencia. El resultado es un directorio de base de datos con exactamente el mismo catálogo que `template1`. No garantiza nada sobre tablas o datos del usuario (estos vendrán solo si se hubiera agregado algo a `template1` antes, o si se clona de `template1`). Tampoco trae roles locales (en PostgreSQL los roles son globales).
+
+- **MySQL/MariaDB:** El servidor agrega un directorio bajo su *datadir* con el nombre dado y registra la base en su diccionario de datos (o en el archivo `db.opt`). No hay transacciones que deshacer: la operación es atómica en el sentido de que, si falla, no queda meta parcial. Se garantizan el ajuste de charset y collation por defecto (opciones `CHARACTER SET` y `COLLATE`) para las tablas futuras. No garantiza independencia de la sesión (en MySQL una base recién creada está inmediatamente disponible) ni registra nada adicional aparte del directorio.
+
+- **SQLite:** No existe concepto SQL estándar de crear base. Se crea abriendo un archivo de base nuevo (por ejemplo, usando el CLI: `sqlite3 nueva.db`). El motor entonces inicializa automáticamente el archivo con las estructuras internas mínimas (una tabla `sqlite_master` vacía). Conceptualmente, garantiza un archivo válido para almacenar tablas futuras; pero no hay un comando SQL interno que haga esto, por lo que su semántica difiere: en SQLite un “catálogo” es implícitamente el sistema de archivos.
+
+**Qué garantiza:** En todos los casos, tras la ejecución exitosa, existe una base de datos nueva e independiente con su espacio de almacenamiento asignado, lista para recibir esquemas de usuario. Además, suelen inicializarse opciones por defecto (collation, tablespace/filegroup, etc.). En Oracle y PostgreSQL también se instalan los objetos de sistema básicos (p.ej. tablas de catálogo, procedimientos internos) vacíos.
+
+**Qué NO garantiza:** No se copian datos de otras bases (excepto la clonación explícita en Postgres), no se migran usuarios o privilegios globales, y no realiza ninguna optimización de datos (es una operación de *setup*, no de *optimización*). Tampoco crea datos de usuario; si el database name ya existía, arroja error (o lo reemplaza en MariaDB). No establece valores de configuraciones de instancia (en SQL Server, la base se crea con el recovery model por defecto salvo que se especifique; en Oracle, la Base de Datos tiene parámetros independientes definidos por el DBA).
+
+---
+
+## Arquitectura interna
+
+Internamente, cada motor procesa `CREATE DATABASE` de manera distinta; a continuación se ilustra un flujo generalizado y se destacan puntos clave por motor:
+
+```mermaid
+flowchart TB
+    A[Cliente/User SQL] --> B[Parser SQL]
+    B --> C[Binder/Resolver de nombres]
+    C --> D{Valida permisos y entorno}
+    D --> E{Executor: crea base}
+    E --> F[Esquema de almacenamiento]
+    F --> G[Actualiza catálogos y logs]
+    G --> H[Base de datos montada/creada]
+```
+
+- **Parser:** Analiza la sintaxis de `CREATE DATABASE`. Todas las bases modernas usan parsers SQL estándar. Por ejemplo, el parser de Oracle usa sus definiciones de BNF internas; SQL Server usa el parser de T-SQL; PostgreSQL usa su analizador YACC; MySQL/MariaDB su propio parser (basado en Flex/Bison); SQLite no tiene un comando `CREATE DATABASE` en SQL. El parser identifica tokens como `CREATE`, `DATABASE`, nombres de archivos, opciones, etc.
+
+- **Binder/Resolver:** Se resuelven nombres (base de datos, propietarios, plantillas, rutas de archivo, tablespaces) y se verifica la existencia de esos objetos del sistema. Por ejemplo, en SQL Server el binder verifica las rutas y prepara las entradas lógicas para los archivos de datos y log. En PostgreSQL se confirma que la base de template existe y se valida el propietario y collation/locales. En Oracle verifica que el nombre coincide con el parámetro `DB_NAME` actual y que no se exceda 8 bytes. En MySQL/MariaDB se verifica que el nombre no viole reglas de sistema de archivos (en MySQL los caracteres inválidos se codifican según las reglas de mapeo de identificadores).
+
+- **Verificación de privilegios:** El motor comprueba que el usuario tenga privilegios necesarios (ver “Permisos requeridos”). P.ej. Oracle exige SYSDBA, SQL Server exige `CREATE DATABASE` en `master` o `CREATE ANY DATABASE`, PostgreSQL exige superusuario o `CREATEDB`, MySQL/MariaDB el privilegio global `CREATE`. SQLite permite la operación sin restricciones desde el SQL (la gestión es a nivel de sistema de archivos). Cualquier falta de permiso aborta la operación.
+
+- **Executor:** Se ejecuta la lógica de creación. Esto puede implicar:
+  - *Oracle:* El proceso `SMON` crea el archivo de control y el registro en él del nuevo nombre de base. Se escriben las tablas de sistema iniciales (SYSTEM, SYSAUX, UNDO, TEMP tablespaces con sus primeros datafiles), se inicializan REDO logs. Finalmente, la base se **monta** (lee control file) y luego se **abre**. Si `CLUSTER_DATABASE` está en `TRUE`, se monta en modo RAC (paralelo).
+  - *SQL Server:* Se asignan identificadores de archivo y se crean físicamente los archivos en disco con los tamaños dados. El motor escribe en cada nuevo archivo las páginas de metadatos iniciales: cabecera, PFS/DMV maps, la página de inicio de base de datos (“boot page”). Se actualiza `sys.sysdatabases` con la nueva entrada. Si se especifica `FILEGROWTH`, se fijan esas propiedades.
+  - *PostgreSQL:* Se inicia un proceso que copia la base de datos plantilla. En `WAL_LOG` (por defecto), lee el directorio de `template1` y copia bloque por bloque al nuevo tablespace, escribiendo bloques en el Write-Ahead Log. En el modo `FILE_COPY`, duplica por sistema de archivos todo el directorio de `template1`. Finalmente, inserta en `pg_database` la nueva base con metadatos (owner, encoding, tablespace, etc.).
+  - *MySQL/MariaDB:* Actualiza su diccionario de datos (o `db.opt`) para registrar la nueva base. Crea el directorio `<datadir>/<db_name>` físicamente. Si se especifican `DEFAULT CHARACTER SET` o `COLLATE`, guarda esos atributos en la definición de la base. Si se especifica `ENCRYPTION`, configura la opción (requiriendo `TABLE_ENCRYPTION_ADMIN` en MySQL Enterprise si difiere del default).
+  - *SQLite:* Al no haber un comando SQL directo, la creación se hace al llamar `sqlite3_open()` con un archivo nuevo. El motor crea el archivo .db, escribe el encabezado de base de datos (estructura de página 1 con el magic header), y crea internamente la tabla `sqlite_master`. Así queda la base lista para recibir esquemas.
+
+- **Storage Engine:** Se asignan espacio en disco. Por ejemplo, SQL Server usa su motor de almacenamiento para inicializar los archivos; InnoDB en MySQL prepara su sistema de diccionario de datos; SQLite escribe un archivo B-tree.
+- **Catálogo:** Se actualizan las tablas de metadatos internas. Oracle guarda la información en el control file y en tablas del Data Dictionary (en SYSTEM). PostgreSQL inserta en `pg_database` y asocia `OID`s. MySQL registra en `information_schema.schemata`.
+- **Logging/Transacciones:** En general, `CREATE DATABASE` **no es transaccional** (no se puede deshacer con ROLLBACK en la mayoría de motores). Por ejemplo, PostgreSQL *no permite* ejecutar `CREATE DATABASE` dentro de una transacción. Oracle y SQL Server tratan el comando como DDL autónomo. En SQL Server y PostgreSQL se escribe al log (transaction log o WAL) la creación (especialmente si se recorre WAL). En Oracle, la creación completa activa el archivo de control de base, pero *no* es una transacción rollbackable en un ROLLBACK de sesión.
+- **Otras áreas:** Manager de transacciones (no aplica en sentido típico para DDL inicial), recuperación (en PostgreSQL con WAL, se puede recuperar bases en curso; en Oracle, si falla antes de OPEN la base, puede necesitar recrear algunos archivos), manejo de roles (por lo general se asigna el creador como owner, aunque en Oracle la base es “propiedad” del usuario SYS), etc. 
+
+---
+
+## Sintaxis oficial
+
+A continuación se detallan las formas sintácticas de `CREATE DATABASE` en cada motor (código ilustrativo, adaptado de la documentación oficial):
+
+- **Oracle Database (SQL Reference, 19c):**  
+  ```sql
+  CREATE DATABASE database_name
+    USER SYS IDENTIFIED BY password
+    USER SYSTEM IDENTIFIED BY password
+    [LOGGING | NOLOGGING]
+    DATAFILE 'path/file1.dbf' SIZE ... AUTOEXTEND ... 
+    [ FILE_NAME_CONVERT = ('from','to') ]
+    [UNDO TABLESPACE undo_ts DATAFILE 'path/undo01.dbf' SIZE ... ]
+    [DEFAULT TABLESPACE users_ts DATAFILE 'path/users01.dbf' SIZE ...]
+    [DEFAULT TEMPORARY TABLESPACE temp_ts TEMPFILE 'path/temp01.dbf' SIZE ...]
+    [DICTIONARY TABLESPACE dict_ts DATAFILE 'path/dict01.dbf' SIZE ...]
+    [NATIONAL CHARACTER SET charset]
+    [CHARACTER SET charset [COLLATE collation]]
+    [ENABLE PLUGGABLE DATABASE [AS] pdb_name]
+    [ NO FORCE LOGGING ]
+    [ NO MAXLOGFILES ]
+    [NO MAXLOGMEMBERS] [ NO FORCE LOGGING ]
+    [ NO MAXLOGHISTORY ]
+    [  MEMORY_TARGET = ... ]
+    [ PARAMETER clauses ]
+    ;
+  ```
+  *Basado en manual Oracle. Variantes incluyen `LOGFILE`, `CONTROLFILE`, etc. See Oracle Docs for details.*
+
+- **Microsoft SQL Server (Transact-SQL):**  
+  ```sql
+  -- Debe ejecutarse en la base master:
+  CREATE DATABASE nombre_DB
+    [ ON PRIMARY ( NAME = <logical_name>, FILENAME = 'os_path\archivo.mdf', SIZE = tamaño, MAXSIZE = tamaño, FILEGROWTH = incremento ) ]
+    [ , <otros_filegroups opcionales> ]
+    [ LOG ON ( NAME = <logical_log>, FILENAME = 'os_path\archivo.ldf', SIZE = tamaño, MAXSIZE = tamaño, FILEGROWTH = incremento ) ]
+    [ ; ]
+  ```
+  *Ejemplo tomado de Microsoft Learn. Opciones adicionales (ofertas de servicio, collation, réplica, FILESTREAM) se usan en Azure SQL o versiones especiales.*  
+
+- **PostgreSQL (SQL 2016+):**  
+  ```sql
+  CREATE DATABASE nombre
+    [ WITH ]
+    [ OWNER = usuario ]
+    [ TEMPLATE = template_db ]
+    [ ENCODING = 'encoding' ]
+    [ LOCALE = 'lo_C_C' ] -- o LC_COLLATE, LC_CTYPE, etc.
+    [ LC_COLLATE = 'collation' ]
+    [ LC_CTYPE = 'ctype' ]
+    [ TABLESPACE = espacio ]
+    [ CONNECTION LIMIT = n ]
+    [ IS_TEMPLATE = { true | false } ]
+    ;
+  ```
+  *Sintaxis oficial basada en la documentación de PostgreSQL. Se incluyen opciones de propietario, base plantilla, codificación y collation.*  
+
+- **MySQL 8.0:**  
+  ```sql
+  CREATE DATABASE [IF NOT EXISTS] base_de_datos
+    [ DEFAULT CHARACTER SET charset_name ]
+    [ DEFAULT COLLATE collation_name ]
+    [ ENCRYPTION = {'Y' | 'N'} ]
+    ;
+  ```
+  *Fuente: Manual de MySQL. En MySQL `SCHEMA` es sinónimo. No existe cláusula `OR REPLACE` en MySQL; el modificador `IF NOT EXISTS` previene error si ya existe.*  
+
+- **MariaDB:**  
+  ```sql
+  CREATE [OR REPLACE] { DATABASE | SCHEMA } [IF NOT EXISTS] base_de_datos
+    [ [DEFAULT] CHARACTER SET [=] charset_name ]
+    [ [DEFAULT] COLLATE [=] collation_name ]
+    [ COMMENT [=] 'comentario' ]
+    ;
+  ```
+  *Basado en la documentación de MariaDB. MaríaDB admite `OR REPLACE` (equivalente a DROP+CREATE) y la opción `COMMENT`.*  
+
+- **SQLite:**  
+  ```sql
+  -- SQLite no tiene CREATE DATABASE; se crea simplemente abriendo un archivo.
+  -- Para adjuntar una base adicional:
+  ATTACH DATABASE 'ruta/nueva.db' AS alias;
+  ```
+  *SQLite crea la base al abrir el archivo. No existe instrucción SQL directa para crear bases globales. Se puede usar `ATTACH DATABASE` para enlazar otro archivo como base de datos.*  
+
+---
+
+## Anatomía
+
+A continuación se explica cada elemento de la sintaxis anterior:
+
+- **CREATE:** Palabra reservada que inicia una instrucción de DDL. Indica al motor que se creará un nuevo objeto (aquí: base de datos).
+
+- **DATABASE:** Tipo de objeto a crear. Señala que se crea un contenedor de base de datos. En MariaDB/MySQL se puede usar sinónimo `SCHEMA` con el mismo efecto.
+
+- **IF NOT EXISTS:** Opción que evita error si la base ya existe. Si ya existe, devuelve solo un *warning* en vez de error. Soporta MySQL y MariaDB. No está en Oracle ni SQL Server (donde se lanza error de existencia).
+
+- **OR REPLACE:** MariaDB (y Oracle recientemente para otros objetos) ofrece este modificador para eliminar la base existente antes de crearla. Equivale a `DROP DATABASE IF EXISTS` + `CREATE DATABASE`.
+
+- **nombre_base** (`database_name`): Identificador del nombre de la base.  
+  - *Oracle:* Debe coincidir con `DB_NAME` del init. Puede tener hasta 8 bytes, sólo ASCII alfanumérico, `_`, `#`, `$`. Ejemplo de regla: inicia con letra, no admite acentos.  
+  - *SQL Server:* Debe seguir reglas de identificadores; puede incluir letras, dígitos, `@`, `$`, `#`, `_`, y puede delimitarse con corchetes `[ ]` o comillas dobles. Hasta 128 caracteres.  
+  - *PostgreSQL:* Nombre de identificador normal; puede usarse `owner.tbname` con punto. Hasta 63 caracteres en práctica.  
+  - *MySQL/MariaDB:* Debe ser válido como nombre de directorio en el S.O. En Linux es case-sensitive. Caracteres especiales se codifican.  
+  - *SQLite:* Al ser archivo, el "nombre de BD" es el alias en `ATTACH` o el nombre de archivo al crear.
+
+- **CHARACTER SET / DEFAULT CHARACTER SET:** Define el conjunto de caracteres por defecto para la base.  
+  - *MySQL/MariaDB:* Se usa `CHARACTER SET charset_name` para definir charset y `COLLATE collation_name` para definir la collation por defecto.  
+  - *Otros:* En Oracle/SQL/SQLite no se especifica aquí; en PostgreSQL se usa `ENCODING` y locales en su lugar.
+
+- **COLLATE / DEFAULT COLLATE:** Establece ordenamiento/collation por defecto.  
+  - *MySQL/MariaDB:* Igual que `CHARACTER SET`.  
+  - *SQL Server:* Se puede especificar al crear (n en la sintaxis no mostrada aquí, pero existe `COLLATE <collation>` en algunos entornos).  
+  - *PostgreSQL:* Se setea con `LC_COLLATE` y `LC_CTYPE` o mediante el parámetro `LOCALE`. Oracle no permite collation distinta en creación; usa la del cluster.
+
+- **OWNER:** (PostgreSQL) – Usuario/rol dueño de la base creada. Si se omite, la crea el rol actual. No se puede asignar a un rol si el usuario no tiene permiso de SET ROLE a ese rol.
+
+- **TEMPLATE:** (PostgreSQL) – Define de qué base plantilla copiar. Puede usarse `template1` (por defecto) o `template0` para un clon limpio. No aplica en otros motores.
+
+- **TABLESPACE:** (PostgreSQL/Oracle) – Tablespace (o filegroup) donde se almacenarán archivos de la nueva base. En Oracle se especifica al final con `DEFAULT TABLESPACE`. En SQL Server se utilizan filegroups (`ON PRIMARY`, `FILEGROUP nombre`).
+
+- **TEMPORARY TABLESPACE / DEFAULT TEMPORARY TABLESPACE:** (Oracle) – Tablespace para segmentos temporales. Ej: `DEFAULT TEMPORARY TABLESPACE temp_ts`.
+
+- **UNDO TABLESPACE:** (Oracle) – Tablespace para undo/rollback de transacciones. Ej: `UNDO TABLESPACE undo_ts`.
+
+- **LOGGING / NOLOGGING:** (Oracle) – Define si las operaciones iniciales (p.ej. import masivo) serán o no registradas. Por defecto `LOGGING`. Si se especifica `NOLOGGING`, reduce generación de redo logs al crear objetos de sistema iniciales (riesgo de recuperación limitada).
+
+- **DATAFILE / TEMPFILE / REDO / CONTROLFILE:** (Oracle) – Claúsulas que determinan la ubicación de archivos físicos. Por ejemplo: `DATAFILE 'path/archivo01.dbf' SIZE 500M AUTOEXTEND ON`. Se pueden tener varias cláusulas para múltiples datafiles. `FILE_NAME_CONVERT` ayuda a convertir rutas de archivos al clonar PDB.
+
+- **LOG ON:** (SQL Server) – Comienza la sección de archivos de registro. Dentro, se usan `(NAME=..., FILENAME=..., SIZE=..., MAXSIZE=..., FILEGROWTH=...)` para el log primario. Por ejemplo en T-SQL de [8]:  
+  ```sql
+  LOG ON 
+    ( NAME = Sales_log, 
+      FILENAME = '...salelog.ldf', 
+      SIZE = 5MB, MAXSIZE = 25MB, FILEGROWTH = 5MB ) 
+  ```
+- **FILEGROUP** (SQL Server) – Sección `ON ( … ), FILEGROUP nombre ( ... ), LOG ON (...)`. Permite definir filegroups con múltiples archivos, como muestra el ejemplo de [18†L223-L230]. Cada filegroup agrupa archivos de datos para un propósito.
+
+- **COMMENT:** (MariaDB) – Texto arbitrario asociado a la base de datos. Se almacena en `information_schema.schemata` y en el archivo `db.opt`.
+
+- **ENCRYPTION:** (MySQL) – Opción que especifica cifrado por defecto (`'Y'` o `'N'`). Requiere privilegio `TABLE_ENCRYPTION_ADMIN` si difiere de la variable global `default_table_encryption`. No existe en MariaDB (hasta la fecha) ni en SQLite; Oracle cifra tablespaces con clauses aparte al nivel de tablespace.
+
+- **AUTOEXTEND, FILEGROWTH, MAXSIZE:** (Oracle/SQL) – Controlan crecimiento automático de archivos. Oracle: `AUTOEXTEND ON NEXT x [MAXSIZE y]`. SQL Server: `FILEGROWTH` y `MAXSIZE`.
+
+- **IF EXISTS:** (No estándar en MySQL/MariaDB para crear; *DROP DATABASE* la usa. No aplica en CREATE.)
+
+- **PALABRAS CLAVE ADICIONALES:** (SQL Server/Azure) – Algunos entornos agregan opciones como `EDITION`, `SERVICE_OBJECTIVE`, `BACKUP_STORAGE_REDUNDANCY` para Azure SQL (consultar documentación de Azure SQL DB). Oracle también tiene `ENABLE PLUGGABLE DATABASE` para contenedores.
+
+Cada una de estas palabras o cláusulas modifica el comportamiento de la creación. Por ejemplo, en [1] Oracle explica que las cláusulas de contraseña para `USER SYS` y `USER SYSTEM` “no son obligatorias” pero se recomiendan. MySQL indica que `LOCK TABLES` activo impide `CREATE DATABASE`. Estos detalles deben considerarse al usar cada sintaxis.
+
+---
+
+## Flujo interno
+
+A continuación, se describe paso a paso lo que ocurre cuando el usuario ejecuta `CREATE DATABASE`:
+
+1. **Invocación:** El usuario envía la sentencia SQL (o la ejecuta mediante GUI/CLI). En Oracle debe estar en modo `STARTUP NOMOUNT`. En SQL Server, la sesión debe estar en la base `master` y **fuera** de cualquier transacción activa.
+
+2. **Análisis léxico/sintáctico:** El motor tokeniza y analiza la instrucción (`CREATE`, `DATABASE`, identificador, opciones). Si faltan paréntesis o puntos y coma, se detecta aquí. Errores de sintaxis aquí abortan.
+
+3. **Resolución de nombres:** El motor valida que los nombres referenciados existan y sean válidos. Ej.: en PostgreSQL verifica que el `TEMPLATE` existe y que `tablespace` existe; en Oracle, que el parámetro `DB_NAME` coincide con el nombre dado; en SQL Server verifica que los paths de archivos existan en el sistema operativo. También resuelve privilegios.
+
+4. **Validación de entorno:** Chequea precondiciones:  
+   - En Oracle confirma que se está en `NOMOUNT` y que hay archivo de parámetro con el nombre base deseado.  
+   - En SQL Server verifica autocommit y que no hay transacción in-flight.  
+   - En PostgreSQL comprueba que **NO** se está en una transacción activa.  
+   - En MySQL/MariaDB no permite `CREATE DATABASE` si hay `LOCK TABLES` activo en esa sesión.  
+   Cualquier violación da error antes de crear nada.  
+
+5. **Reserva de recursos (Executor):**  
+   - Se reserva espacio en disco para archivos nuevos. Oracle crea ficheros de control/redo; SQL Server crea archivos mdf/ldf; PostgreSQL prepara espacio en tablespaces; MySQL crea directorio y archivos de metadatos.  
+   - Se escriben páginas iniciales: por ejemplo, SQL Server pone la *página de arranque* en los archivos de datos/log. Oracle escribe encabezados en datafiles con información (nombre BD, fecha creación).  
+   - El servidor actualiza sus estructuras internas: marca la base como existente. En Postgres inserta en `pg_database` el nombre, owner y configuración; en SQL Server inserta en `sys.databases`; en Oracle actualiza `controlfile` con `CREATE DATABASE` y en `data dictionary` (SYS tables) se configuran los sysobjects iniciales.  
+   - En esta fase también se establecen propiedades: tamaño inicial, crecimiento automático, ubicación de los archivos.
+
+6. **Finalización:**  
+   - En Oracle, tras escribir archivos, la base se monta y luego se abre (venta).  
+   - SQL Server la pone en línea automáticamente.  
+   - PostgreSQL libera el bloqueo sobre la plantilla y la base queda “online”.  
+   - MySQL la hace visible de inmediato (`USE new_db;` funcionará luego de CREATE).  
+   - SQLite la termina al cerrar el archivo.  
+
+7. **Confirmación al usuario:** Finalmente, la sesión recibe un mensaje de éxito (“Database created.” u OK). Si se usó `IF NOT EXISTS`, puede ser advertencia en vez de error si ya existía. Si falló algo (p.ej. permiso, disco lleno, nombre inválido), el motor arroja un error específico y no crea nada.
+
+---
+
+## Objetos involucrados
+
+En la creación de una base de datos **intervienen y/o afectan** los siguientes objetos y estructuras, según el motor:
+
+- **Tablas del sistema y catálogo:** Se crean o inicializan varias tablas de metadatos vacías.  
+  - *Oracle:* Se instancia el diccionario completo (esquemas `SYS` con tablas de sistema en `SYSTEM` tablespace, etc.), pero vacías. Se crean usuarios internos `SYS` y `SYSTEM` (pueden tener contraseñas por defecto).  
+  - *SQL Server:* Se añaden registros en vistas de catálogo (`sys.databases`, `sys.master_files`).  
+  - *PostgreSQL:* Inserta en `pg_database`, y bloquea system catalogs para la copia.  
+  - *MySQL/MariaDB:* Actualiza `information_schema.schemata` (o su diccionario interno) y crea un directorio con archivos `.frm`/`.ibd` según tablas futuras.  
+  - *SQLite:* Crea la tabla `sqlite_master` dentro del archivo, que lista los objetos definidos (vacía al inicio).
+
+- **Archivos físicos:**  
+  - *Datafiles (Oracle, SQL Server, MySQL InnoDB):* Se crean uno o varios archivos en disco. En Oracle y SQL Server incluyen un “boot page” para cada archivo (páginas de sistema).  
+  - *Redo log / WAL:* Oracle crea archivos de redo logs iniciales; PostgreSQL registra en WAL el proceso de copia; SQL Server crea el `.ldf` inicial y escribe su cabecera.  
+  - *Directorio de base:* MySQL/MariaDB crean un directorio con el nombre de la base. SQLite crea un solo archivo `.db`.  
+  - *Filegroups y Tablespaces:* SQL Server agrupa archivos en filegroups (`PRIMARY` por defecto). Oracle asigna un DEFAULT TABLESPACE (USERS si no se especifica) y un TEMP TABLESPACE. PostgreSQL usa `pg_default` o el que se especifique.  
+
+- **Schemas / Espacios de nombres:** En algunos motores, tras la creación se crean esquemas o espacios:  
+  - *PostgreSQL:* Automáticamente la base contiene el esquema público (`public`).  
+  - *Oracle:* Cada tablespace creado equivale a un espacio físico; no hay esquemas nuevos aparte de `SYS`, `SYSTEM`.  
+  - *MySQL/MariaDB:* No hay esquema implícito; las bases usan “default schema” nombrado como la BD.  
+  - *SQL Server:* La base nueva tiene un esquema `dbo` por defecto y un schema `guest`.
+
+- **Índices, constraints:** No hay índices de usuario (no hay tablas de usuario). Solo se crean índices internos del diccionario (por ejemplo, índices en tablas de sistema en Oracle). No se heredan *constraints* de template en PostgreSQL (solo se copian las definiciones de sistema).
+  
+- **Roles y permisos:** Generalmente el creador se asigna como propietario o `DBO` equivalente:  
+  - *SQL Server:* El creador se vuelve dueño (`DBO`) de la base.  
+  - *PostgreSQL:* El rol pasado en `OWNER` es el dueño.  
+  - *MySQL/MariaDB:* El usuario actual es otorgado permisos GRANT ALL en la nueva base por defecto.  
+  - *Oracle:* No asigna nuevo rol; el creador ejecutó como SYSDBA.  
+
+- **Transacciones / Bloqueos:** Se adquieren *locks* exclusivos: PostgreSQL bloquea la base plantilla; SQL Server bloquea el catálogo `sys.databases`; Oracle no permite transacciones activas. Hasta que termina `CREATE`, otras sesiones no ven la base incompleta. No hay bloqueos de filas, solo de catálogo/estructura.
+
+- **Tablas temporales:** Algunos motores crean estructuras temporales iniciales: p.ej. SQL Server crea la tabla de sistema `sys.sysallocunits` en la nueva base. En PostgreSQL se crea la tabla de WAL del sistema de transacciones.
+
+- **Diccionario de datos:** En MySQL/MariaDB, la creación escribe metadatos en el diccionario interno (MySQL 8) o archivos del sistema (`db.opt`). En Oracle, la creación escribe en el control file y luego en el diccionario SYS (SYS.AQ$_ queues, SYS table definitions). En SQLite el diccionario es la tabla interna `sqlite_master`.
+
+- **Spacemanagement:** Al menos un segmento de datos y de logs inicial es creado. Por ejemplo, Oracle crea un segmento SYSTEM mínimo. SQL Server crea un segmento de datos en `PRIMARY`.
+
+En resumen, participan objetos de bajo nivel (archivos, páginas de sistema), estructuras del motor (catálogos, tablespaces/filegroups) y a menudo usuarios internos (p.ej. SYS en Oracle). No se afectan tablas de usuario existentes (salvo en MariaDB con OR REPLACE, donde sí se hace DROP). No se afectan esquemas preexistentes fuera de la base nueva. La base de datos nueva es autónoma: no comparte tablas con otras.
+
+```mermaid
+erDiagram
+    DATABASE ||--|{ SCHEMA : contains
+    SCHEMA ||--|{ TABLE : contains
+    TABLE ||--|{ COLUMN : contains
+    TABLE }|..|{ INDEX : "maintains"
+    TABLE ||--o{ CONSTRAINT : has
+```
+
+---
+
+## Dependencias
+
+- **Previamente requerido:**  
+  - *Software instalado:* Instancia del motor ejecutándose.  
+  - *Entorno:* Para Oracle, archivo `init.ora` con `DB_NAME` definido y modo `NOMOUNT`. Para SQL Server, conexión a `master` con autocommit. PostgreSQL: servidor en marcha y `template1` accesible.  
+  - *Privilegios:* El usuario debe tener los permisos indicados (ver siguiente sección).  
+  - *Recursos de disco:* Espacio libre suficiente en los paths indicados.  
+  - *Dependencias de diccionarios:* En MySQL, no debe haber bloqueo `LOCK TABLES`; en PostgreSQL la base plantilla debe permitir clonación (no debe haber conexiones concurrentes en `template1`).
+
+- **Lo que crea:**  
+  - Un nuevo contenedor de base de datos, con directorio/archivos físicos.  
+  - En el diccionario de la instancia: nuevas entradas de metadata.  
+  - Objetos de sistema vacíos iniciales (tablas de diccionario, índices, estructuras de sistema).  
+  - Tablespaces/filegroups si se especifican.  
+  - El esquema por defecto (`public` en Postgres, `dbo` en SQL Server, ninguno en MySQL excepto la propia BD).
+
+- **Lo que modifica:**  
+  - *Diccionarios de instancia:* Registros en `sys.databases` (SQL Server), `pg_database` (Postgres), CONTROL_FILES (Oracle), `information_schema` (MySQL).  
+  - *Archivos:* Se crean o extienden archivos de disco. SQL Server puede modificar archivos de transacciones si están en autogrowth.  
+  - *Configuración:* En general, no cambia configuraciones globales, salvo registrarlo en catálogos. MariaDB con `OR REPLACE` primero *modifica* (drop) la base existente.  
+
+- **Lo que destruye:**  
+  - Normalmente nada. Con `OR REPLACE` en MariaDB/Oracle (este último no soporta `OR REPLACE` para bases, sólo para otros objetos) se elimina la base previa con mismo nombre.  
+  - *Dependencias de DROP:* Si se rebautiza o reemplaza, se puede destruir el contenido anterior. Ejemplo: `DROP DATABASE IF EXISTS miDB; CREATE DATABASE miDB;` deja la base limpia.  
+  - Nota: `CREATE DATABASE` no destruye usuarios/roles previos; esto sólo afectaría a la base antigua si se usa OR REPLACE.
+
+En síntesis, **depende** de tener instancias operativas, permisos y espacio suficiente, y **crea** todos los elementos necesarios para una base vacía, sin **destruir** nada salvo en usos explícitos de reemplazo.
+
+---
+
+## Permisos requeridos
+
+- **Oracle:** Solo un usuario con privilegio `SYSDBA` (o `SYSOPER` en versiones antiguas) puede ejecutar `CREATE DATABASE`. En la documentación Oracle se especifica claramente este requisito. Ejemplo:  
+  ```sql
+  CONNECT sys/Password AS SYSDBA;
+  CREATE DATABASE testdb ...;
+  -- Sin SYSDBA dará ORA-01031: insufficient privileges.
+  ```
+- **SQL Server:** Se requiere `CREATE DATABASE` en la base `master`, o bien `CREATE ANY DATABASE` (server role `serveradmin`). En la práctica, típicamente se tiene el rol `sysadmin`. Ejemplo:  
+  ```sql
+  USE master;
+  CREATE DATABASE Demo;
+  -- El usuario debe tener CREATE DATABASE en master o ser sysadmin.
+  ```
+- **PostgreSQL:** Se necesita ser **superusuario** o tener el privilegio especial `CREATEDB`. Cualquier rol con ese privilegio puede crear bases. Ejemplo:  
+  ```sql
+  CREATE ROLE cliente LOGIN CREATEDB PASSWORD 'xx';
+  SET ROLE cliente;
+  CREATE DATABASE ventas OWNER cliente;
+  -- Si 'cliente' no tiene CREATEDB, falla con ERROR: must be superuser or have CREATEDB privilege.
+  ```
+- **MySQL:** Se requiere el permiso global `CREATE` (no es un permiso específico “CREATE DATABASE”, sino el global de creación). El usuario típico `root` lo tiene. Ejemplo:  
+  ```sql
+  GRANT CREATE ON *.* TO 'user'@'localhost';
+  CREATE DATABASE mercadeo;
+  ```
+- **MariaDB:** Igual que MySQL, permiso global `CREATE` en servidor. Además, si se usa `ENCRYPTION` (no aplicable en MariaDB por ahora), requeriría `TABLE_ENCRYPTION_ADMIN`. Ejemplo similar a MySQL.  
+- **SQLite:** No hay permisos internos de SQL. Solo se requiere que el proceso tenga **permiso de escritura en el sistema de archivos** en el directorio destino (pues `sqlite3 nombre.db` crea el archivo). No hay roles ni privilegios SQL para crear bases. Ejemplo:  
+  ```bash
+  sqlite3 /ruta_sin_permiso/base.db
+  -- Si la ruta no es escribible, SQLite devuelve un error de sistema (p.ej. permiso denegado).
+  ```
+
+**Ejemplos de permisos y efectos:**  
+
+```sql
+-- SQL Server: falla en otra BD distinta a master:
+CREATE DATABASE Prueba;  -- Error: must be in master.
+GO
+
+USE master;
+CREATE DATABASE Prueba;  -- OK si el usuario tiene permiso.
+```
+
+```sql
+-- PostgreSQL: permiso insuficiente:
+CREATE DATABASE demo OWNER otra_persona;
+-- ERROR: must be superuser or createdb privilege
+```
+
+```sql
+-- MySQL: sin permiso CREATE:
+CREATE DATABASE marketing;
+-- ERROR 1044 (42000): Access denied for user 'usr'@'host' to database 'marketing'
+```
+
+---
+
+## Seguridad
+
+- **Impacto de crear bases:**  
+  - *Superuser/Admin:* Crear bases de datos es una operación de alto nivel. Idealmente, solo roles de administración deben tener este permiso, ya que permite reservas de espacio y potencialmente consumo de recursos (espacio en disco, memory).  
+  - *Aislamiento:* Cada base está aislada. Los usuarios de una BD no ven contenido de otras (a menos que tengan privilegios globales). En SQL Server y PostgreSQL, para acceder a otra base se necesita reconectar o tener permisos en el DB master/otros. Esto protege información entre bases por defecto.  
+  - *Inyección SQL:* Como con cualquier comando, se debe precaución ante inyección. Un atacante con acceso podría crear bases adicionales. Se aconseja validar y parametrizar los nombres de BD cuando se usen en scripts dinámicos.
+  - *Sobreescritura no intencionada:* En MariaDB, `OR REPLACE` puede borrar datos inadvertidamente si la base existe. Debe usarse con cuidado.
+
+- **Buenas prácticas de seguridad:**  
+  - Limitar el número de cuentas con permiso `CREATE DATABASE` o `CREATEDB`. En entornos con muchos desarrolladores, mejor otorgar `CREATE TABLE`/`CREATE SCHEMA` en una DB preexistente en lugar de muchos DBs nuevos.  
+  - En Oracle, cambiar las contraseñas por defecto de SYS/SYSTEM que se asignan si no se especifican en `CREATE DATABASE`.  
+  - En MySQL Enterprise, si se usa cifrado (`ENCRYPTION=Y`), asegurarse de contar con el rol `TABLE_ENCRYPTION_ADMIN` si se va a cambiar la política predeterminada.  
+  - En PostgreSQL, crear bases a partir de `template0` si la plantilla actual de `template1` no es de confianza (evitar copiar objetos maliciosos).  
+  - Mantener copias de seguridad del catálogo de sistemas (p.ej. backup de master en SQL Server o RMAN de control file en Oracle) justo después de crear nuevas bases.
+
+- **Riesgos y consideraciones:**  
+  - *Denegación de servicio:* Exceso de bases de datos puede agotar IOPS o espacio en disco. SQL Server limita a 32767 bases por instancia; otros dependen del sistema de archivos o no tienen límite práctico.  
+  - *Riesgo de datos:* En Oracle, crear una base sobre una existente **borra** todos los datos anteriores. Se advierte que “use esta instrucción solo si entiende sus consecuencias”.  
+  - *Configuración errónea:* Si se especifican mal los tamaños de archivos o paths (p.ej. disco lleno o ruta inválida), el servidor puede fallar en crear la BD o entrar en estado de error. Siempre validar rutas y espacio.  
+  - *Exposición en RAG/IDE:* Como este documento será usado por IA y entornos de desarrollo, se debe asegurar que sólo se muestren instrucciones autorizadas; no incluir contraseñas reales (usar placeholders como `password`).
+
+---
+
+## Ejemplos
+
+A continuación se muestran varios ejemplos de creación de bases de datos, desde usos simples hasta escenarios avanzados, con comentarios:
+
+```sql
+-- 1) Crear una base simple en Oracle (20c) con archivos especificados:
+CONNECT sys/PASS as SYSDBA;
+CREATE DATABASE ventas
+  USER SYS IDENTIFIED BY sys_pass
+  USER SYSTEM IDENTIFIED BY sys_pass
+  LOGFILE GROUP 1 ('/u01/oradata/ventas/red01.log') SIZE 100M,
+          GROUP 2 ('/u01/oradata/ventas/red02.log') SIZE 100M
+  DATAFILE '/u01/oradata/ventas/system01.dbf' SIZE 500M
+           AUTOEXTEND ON NEXT 50M MAXSIZE 2G
+  DEFAULT TABLESPACE users
+  DEFAULT TEMPORARY TABLESPACE temp;
+-- Este comando crea BD 'ventas', asigna contraseñas, define un redo log y un datafile.
+```
+
+```sql
+-- 2) SQL Server: base con archivo principal y registro de transacción:
+USE master;
+GO
+CREATE DATABASE Tienda
+  ON (NAME = Tienda_dat, 
+      FILENAME = 'D:\MSSQL\Data\Tienda.mdf', 
+      SIZE = 10MB, MAXSIZE = 100MB, FILEGROWTH = 5MB)
+  LOG ON (NAME = Tienda_log,
+          FILENAME = 'D:\MSSQL\Data\Tienda.ldf',
+          SIZE = 5MB, MAXSIZE = 50MB, FILEGROWTH = 5MB);
+-- Se crea DB 'Tienda' con archivos en disco D:. El primero será PRIMARY.
+```
+
+```sql
+-- 3) PostgreSQL: crear con propietario y encoding específico:
+CREATE DATABASE reportes
+  OWNER adminusr
+  ENCODING = 'UTF8'
+  LC_COLLATE = 'es_ES.utf8'
+  LC_CTYPE = 'es_ES.utf8'
+  TABLESPACE = reports_space
+  CONNECTION LIMIT = 100;
+-- La DB 'reportes' tendrá encoding UTF8, collation española, y límite de 100 conexiones.
+```
+
+```sql
+-- 4) MySQL: base con collation personalizado:
+CREATE DATABASE inventarios
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_spanish_ci;
+-- Esta base usará UTF-8 multibyte y collation en español por defecto.
+```
+
+```sql
+-- 5) MariaDB: reemplazar base existente y agregar comentario:
+CREATE OR REPLACE DATABASE contabilidad
+  CHARACTER SET latin1
+  COLLATE latin1_spanish_ci
+  COMMENT = 'Base de datos para la contabilidad general';
+-- Si 'contabilidad' existe, se elimina primero. Se asigna juego de caracteres ISO-latin1.
+```
+
+```sql
+-- 6) SQLite: crear (se crea archivo al abrirlo):
+.open /tmp/bd_sesion.db
+-- Esto crea (si no existe) bd_sesion.db y lo abre. No hay instrucción CREATE DATABASE.
+```
+
+```sql
+-- 7) Contraejemplo: MySQL dentro de LOCK TABLES (no permitido):
+LOCK TABLES usuarios WRITE;
+CREATE DATABASE globales;
+-- ERROR: CREATE DATABASE is not allowed while LOCK TABLES is active.
+UNLOCK TABLES;
+```
+
+```sql
+-- 8) Contraejemplo: PostgreSQL dentro de transacción:
+BEGIN;
+CREATE DATABASE prueba;
+-- ERROR: CREATE DATABASE cannot run inside a transaction block.
+```
+
+```sql
+-- 9) Edge case: SQL Server límite de bases:
+-- En SQL Server, se pueden crear hasta 32767 bases por instancia.
+-- Ejemplo (no es práctico): crear bases en un loop hasta el límite:
+DECLARE @i INT = 1;
+WHILE @i <= 32768
+BEGIN
+  EXEC('CREATE DATABASE db_test_' + @i);
+  SET @i += 1;
+END;
+-- En la creación #32768 fallará por límite.
+```
+
+```sql
+-- 10) Edge case: MySQL nombre con caracteres especiales:
+CREATE DATABASE `ventas$2021`;
+-- MySQL permite $ y _ en nombres. Se crea carpeta 'ventas$2021'.
+```
+
+```sql
+-- 11) Excepciones: SQL Server ruta inválida:
+CREATE DATABASE prueba2
+  ON (NAME=pru_dat, FILENAME='Z:\ruta_inexistente\p.dat', SIZE=5MB);
+-- ERROR: Operating system error 3: 'El sistema no puede encontrar la ruta especificada.'
+```
+
+```sql
+-- 12) PostgreSQL: crear base usando template0 (prístina):
+CREATE DATABASE limpia
+  TEMPLATE = template0;
+-- 'limpia' solo contendrá objetos del sistema originales, evitando objetos extras en template1.
+```
+
+```sql
+-- 13) SQL Server en Azure (Azure SQL DB ejemplo):
+CREATE DATABASE MyAzureDB
+  (EDITION = 'GeneralPurpose', MAXSIZE = 4GB, SERVICE_OBJECTIVE = 'GP_S_Gen5_2');
+-- Sintaxis específica de Azure SQL. Ejemplo de [7†L1271-L1280].
+```
+
+```sql
+-- 14) MaríaDB con OR REPLACE y comentarios largos:
+CREATE OR REPLACE DATABASE clientes
+  CHARACTER SET latin1
+  COLLATE latin1_general_ci
+  COMMENT = 'Base de datos con datos de clientes (CRM)';
+-- Comentario de la BD se guarda en db.opt (max 1024 bytes).
+```
+
+```sql
+-- 15) PostgreSQL con parámetros de locale predefinido:
+CREATE DATABASE idioma_es 
+  WITH OWNER = usuariox
+       ENCODING = 'LATIN1'
+       LC_COLLATE = 'es_ES.iso885915'
+       TEMPLATE = template0;
+-- Base con collation español ISO (Latin9) y sin objetos extra en la plantilla.
+```
+
+Estos ejemplos demuestran variantes en cada motor. Cada sentencia debe terminar con punto y coma (`;`) cuando se ejecuta desde una consola SQL estándar (en ejemplos simplificados se asume terminación).
+
+---
+
+## Contraejemplos
+
+Situaciones **qué NO hacer** al crear bases de datos y cómo corregir:
+
+- **Crear sobre una base existente sin IF NOT EXISTS u OR REPLACE (MariaDB):**  
+  ```sql
+  CREATE DATABASE ventas;
+  CREATE DATABASE ventas;  -- second time
+  ```
+  *Error:* la segunda ejecución falla con “Database 'ventas' already exists”.  
+  *Corrección:* usar `IF NOT EXISTS` para omitir el error o `OR REPLACE` (si se quiere borrar y recrear).  
+
+- **Ejecutar dentro de transacción (PostgreSQL/SQL):**  
+  ```sql
+  BEGIN;
+  CREATE DATABASE testdb;
+  COMMIT;
+  ```
+  *Error:* no permitido en transacción.  
+  *Corrección:* colocar `CREATE DATABASE` fuera de cualquier `BEGIN/COMMIT`, o usar `autocommit`.
+
+- **Nombre inválido según reglas del motor:**  
+  ```sql
+  CREATE DATABASE 123ventas;    -- Empieza con dígito
+  ```
+  *Error:* identificador inválido (depends motor).  
+  *Corrección:* usar un nombre válido, p.ej. `ventas123` o encerrar en comillas si se permite (no recomendado).
+
+- **Permiso insuficiente:**  
+  Ejecutar como usuario sin privilegios. Ej: en Oracle sin SYSDBA o en SQL Server en DB no master produce error de permiso.  
+  *Corrección:* usar una cuenta apropiada o conceder el privilegio necesario.
+
+- **Bloqueo de tablas (MySQL):**  
+  ```sql
+  LOCK TABLES t1 WRITE;
+  CREATE DATABASE global;
+  ```
+  *Error:* “CREATE DATABASE not allowed while LOCK TABLES is active”.  
+  *Corrección:* `UNLOCK TABLES;` antes de crear la base.
+
+- **Ruta de archivo incorrecta (SQL Server, Oracle):**  
+  ```sql
+  CREATE DATABASE DBDemo ON (NAME=Demo, FILENAME='C:\noExiste\demo.mdf', ...);
+  ```
+  *Error:* “Operating system error” (ruta no encontrada).  
+  *Corrección:* asegurarse que la carpeta existe en el sistema de archivos del servidor, o usar rutas absolutas correctas.
+
+- **Usar cláusulas de otro motor:**  
+  ```sql
+  CREATE DATABASE db1 DEFAULT CHARACTER SET utf8mb4;  -- válido en MySQL
+  ```
+  En SQL Server esto no existe.  
+  *Corrección:* remover opciones no soportadas o adaptar sintaxis al motor (en SQL Server se define collation, no default charset).
+
+- **Pensar que crea usuarios o esquemas:** `CREATE DATABASE` solo afecta a la base en sí. No crea automáticamente un esquema con nombre de usuario (como en Oracle donde SCHEMA = USUARIO). Si se necesita esquema, en Oracle hay que usar `CREATE USER` y darle tablespace; en PostgreSQL se crean esquemas dentro, pero `CREATE DATABASE` no crea esquemas de usuario.
+
+Siempre verificar las reglas de sintaxis y permisos para cada motor específico.
+
+---
+
+## Casos límite
+
+- **Número máximo de bases:**  
+  - *SQL Server:* Límite de 32,767 bases por instancia.  
+  - *Oracle:* Teóricamente pocas (cada base ocupando un listener distinto, usualmente 1) o en multitenant un CDB con muchas PDB (20c soporta cientos).  
+  - *PostgreSQL:* Sin límite específico (depende de tablespaces y `pg_database`).  
+  - *MySQL/MariaDB:* Ilimitado (hasta límite de carpetas en el FS).  
+  - *SQLite:* Cada archivo es una base; no hay límite (excepto sistemas de archivos).  
+
+- **Espacios en blanco en nombre:** Algunos motores no permiten espacios sin comillas. Por ejemplo, `CREATE DATABASE "Mi Base";` (PostgreSQL) crea con comillas, pero en SQL Server se usarían corchetes `[Mi Base]`. Lo ideal es no usar espacios.
+
+- **Localizaciones mixtas:**  
+  - *SQL Server:* No se pueden usar UNC (red) paths en datos sin consideraciones especiales; `SIZE` se ignora en UNC.  
+  - *Oracle:* Se requiere que los directorios existan y sean accesibles por el OS.
+
+- **Conexiones concurrentes:** En PostgreSQL, si alguna sesión está conectada a la plantilla (`template1`) al iniciar `CREATE DATABASE`, fallará (porque bloquea).  
+- **Caracteres Unicode:**  
+  - *Oracle:* Base debe ser ASCII (no se admiten caracteres de conjuntos internacionales).  
+  - *MySQL/MariaDB:* Permite Unicode en nombres (codificado en el FS).  
+  - *SQL Server:* Identificadores Unicode pueden ir con doble comilla.  
+- **SQL SQLite:** No hay `CREATE DATABASE`; intentar `CREATE DATABASE` da error de sintaxis. La manera "límite" es simularlo con archivos/claves.
+
+- **IF NOT EXISTS ignorando caso:**  
+  - En MySQL/MariaDB `IF NOT EXISTS` solo previene error, no avisa si la BD ya existía. A veces es mejor comprobar manualmente.
+
+- **Criterios de tamaño muy pequeños:** Poner `SIZE=0` o `0MB` suele fallar; cada motor tiene tamaño mínimo. SQL Server, por defecto, crea 1 MB si no se indica [8†L130-L134].
+
+- **Sobreescribir datos sensibles:** Usar `OR REPLACE` en MariaDB sin respaldo puede eliminar datos accidentalmente. Límite de comentario (1024 bytes en <10.5, ver [12†L204-L209]).
+
+En general, los casos límite se originan en restricciones de identifcadores, permisos, concurrencia o dimensiones (espacio en disco, límites de objetos). Consultar la documentación oficial de cada motor revela comportamientos precisos (por ejemplo, [23†L25-L33] detalla las condiciones de bloqueo en Postgres).
+
+---
+
+## Diferencias entre motores
+
+A continuación una tabla comparativa clave de **aspectos técnicos** de `CREATE DATABASE` en cada motor. Luego se explica detalladamente:
+
+| Aspecto / Motor       | Oracle Database                  | SQL Server                       | PostgreSQL                     | MySQL                                 | MariaDB                           | SQLite                           |
+|-----------------------|----------------------------------|----------------------------------|--------------------------------|---------------------------------------|------------------------------------|----------------------------------|
+| **Tipo de BD**        | Instancia CDB o base independiente (pre-12c). Admite PDB/CDB. | Base de datos en instancia (mismo proceso). | Base de datos dentro de *cluster* (única instancia, múltiples bases). | Base (carpeta) independiente por servidor. | Similar a MySQL.                 | Archivo `.db` independiente por conexión. |
+| **Sintaxis Principal**| Compleja, con múltiples cláusulas (`DATAFILE`, `UNDO TABLESPACE`, etc.). | `ON PRIMARY (...) LOG ON (...)` para archivos. | Sintaxis más simple con `WITH OWNER, TEMPLATE, ENCODING, LOCALE`. | `CREATE [IF NOT EXISTS] name [CHARSET][COLLATE][ENCRYPTION]`. | Similar a MySQL + `OR REPLACE`, `COMMENT`. | *No aplica:* crear usando `ATTACH`.  |
+| **Permisos**          | `SYSDBA` (ningún otro rol puede).| `CREATE DATABASE` en `master` o servidoradmin/sysadmin. | Superusuario o `CREATEDB`. | Privilegio global `CREATE` (o `CREATE ANY DATABASE`). | Privilegio global `CREATE`. | Permiso OS para escribir archivo (no SQL).  |
+| **Entorno**           | Debe estar en modo NOMOUNT (archivo de init cargado). | Debe estar conectado a `master`, sin transacción. | No permitir transacción activa. | No en transacción si `LOCK TABLES`. | Igual que MySQL.                | Simple: ejecutar CLI para crear archivo. |
+| **Estructura Física** | Se usan control files, datafiles, redologs, tablespaces, archivos de undo. | Usa archivos `.mdf` (datafiles) y `.ldf` (logs) asignados a filegroups. | Duplica directorio de `template1` o extiende block a block. | Crea un directorio + archivos InnoDB/MyISAM; no hay “log files” aparte (solo archivos de datos/ibd o engine). | Igual que MySQL (dir + archivos). | Un único archivo SQLite para datos y log en WAL (si se activa). |
+| **Tablespaces/Filegroups** | Sí: DEFAULT TABLESPACE, UNDO TS, TEMP TS. | Sí: PRIMARY por defecto, se pueden crear otros filegroups. | No (gestionado con tablespaces opcionalmente). | No (cada base es independiente). | No.                          | No tiene concepto (sólo archivos). |
+| **Crear por duplicación** | *ENABLE PLUGGABLE DATABASE* permite crear PDB como clon de PDB. | *FOR ATTACH* puede usar archivos existentes. | TEMPLATE permite escoger `template1` o `template0`. | `CREATE DATABASE ... AS COPY OF` en Azure SQL (sintaxis especial) o mysqldump para copiar. | No soporta directamente copia; se duplica manualmente o usa `mysqldump`. | No aplicable (copia de archivo es manual). |
+| **Uso de collation/charset** | Se define al nivel de BD por parámetros de instancia, no en la sentencia. | Se puede especificar COLLATE en la cláusula `COLLATE=`. | Se define con `LC_COLLATE` y `LC_CTYPE` o `LOCALE`. | `DEFAULT CHARACTER SET`/`COLLATE`. | Igual que MySQL.            | Depende del compile (utf-8 por defecto en nuevas versiones). |
+| **IF NOT EXISTS / OR REPLACE** | *No lo soporta* (error si ya existe). | No soportado (error si existe). | No soportado en SQL estándar; se debe verificar en `pg_database`. | `IF NOT EXISTS` sí (warning en MySQL). | `IF NOT EXISTS` y `OR REPLACE` disponibles. | No, se crea directamente archivo (null). |
+| **Persistencia/Logging**   | Registra en controlfile, redo logs. No deshace. | Registra en transaction log (log full). | Registra en WAL (especialmente estrategia `WAL_LOG`). | Minimal: escribe en diccionario (en general no usa un log separado al nivel de base). | Como MySQL.                 | Registro WAL si está habilitado (modo WAL). |
+| **Inmediatez de uso** | Después de `CREATE` se puede usar (open database). | Después de `CREATE`, la BD está online. | Después de `CREATE`, la nueva BD acepta conexiones. | Inmediatamente disponible para `USE nombre;`. | Igual que MySQL.            | Archivo creado, puede abrirse con `.open`. |
+| **Rollback/Atomización** | *No es transaccional:* no se puede hacer rollback. | *No transaccional:* el DDL no participa en transacciones. | No transaccional (salvo error aborta). | Similar, DDL no se puede revertir con ROLLBACK. | Igual.                      | N/A (archivo se queda o no existe si falla). |
+| **ANSI SQL**         | *No definido en ANSI* (Oracle ofrece sintaxis propietaria). | *No en ANSI* (uso T-SQL propietarios). | Sintaxis cercana al estándar SQL. | Usa sintaxis propia; SQL standard no define CREATE DATABASE. | Similar a MySQL.           | *No existe en ANSI/ISO.* |
+
+**Explicaciones adicionales:**
+
+- **Orientación multi-base:** Oracle clásico (no CDB) y SQL Server tratan cada base como contenedores totalmente separados en un servidor. PostgreSQL e MySQL alojan múltiples DBs en una misma instancia, separadas por directorio o esquema. SQLite no tiene múltiples DBs simultáneas (solo archivos).
+
+- **Pluggable DB (Oracle) vs Databases (PG):** Un Oracle CDB puede contener varias PDB; conceptualmente similar a un clúster de PostgreSQL con múltiples bases. Sin embargo, en Oracle la raíz CDB se maneja diferente, y `CREATE DATABASE` en 12c+ se usa para crear nuevas CDB, no PDB (se usa `CREATE PLUGGABLE DATABASE` para PDB).
+
+- **Eliminación/creación:** Solo MariaDB y MySQL (con `IF NOT EXISTS`) previenen error por existencia. Oracle/SQL/Postgres no tienen tal seguridad (hay que chequear antes). MariaDB añade `OR REPLACE` para forzar recreación.
+
+- **Carpetas vs Archivos:** En MySQL/MariaDB/SQLite, la BD es un espacio en disco (carpeta o archivo). En Oracle/SQL Server/PG se abstraen tablespaces o clústeres de archivos más complejos.
+
+- **Disponibilidad:** En SQL Server y Oracle, crear base requiere reinvocar ciertos recursos (por ejemplo, cargar el archivo en control). PostgreSQL la hace visible instantáneamente tras copiar.
+
+En cada motor hay detalles propios: por ejemplo, Oracle sugiere leer la *Oracle Database Security Guide* al crear (menciona [1†L16-L20]). SQL Server en Azure ofrece parámetros de servicio (vistas en [7†L1271-L1291]). MariaDB y MySQL manejan la base como esquema de archivos (ver [10†L704-L712]). 
+
+La tabla resume diferencias conceptuales y sintácticas claves; en la sección *Diferencias entre motores* más abajo se detalla contexto.
+
+---
+
+## Equivalencias
+
+A continuación, algunos ejemplos de cómo **traducir o entender equivalencias** de `CREATE DATABASE` entre sistemas comunes:
+
+- **Oracle ↔ PostgreSQL:**  
+  - Oracle (pre-12c) trabaja con instancias, PostgreSQL con clúster de bases. Conceptualmente, **Base Oracle = Base Postgres**. Si en Oracle se usa CDB/PDB, un PDB sería parecido a una base normal en PG.  
+  - Oracle no tiene un concepto de *schema* como Postgres (en Oracle cada usuario es un esquema). Al migrar, se crea una base en Postgres y luego se puede crear un esquema público o asignar ownership.  
+  - Sintaxis: La cláusula `ENABLE PLUGGABLE DATABASE` de Oracle no tiene equivalente directo en PG (no hay contenedores anidados). Se ignora o se refleja migrando a un cluster separado.  
+  - Ejemplo: `CREATE DATABASE prueba OWNER usr` en PG similar a `CREATE DATABASE prueba` en Oracle (donde el propietario siempre es SYS).
+
+- **Oracle ↔ SQL Server:**  
+  - Ambas crean bases independientes. Un script Oracle `CREATE DATABASE DB1 ...` puede traducirse a un script T-SQL donde se definen `ON... LOG ON`.  
+  - Oracle `DEFAULT TEMPORARY TABLESPACE` equivale a SQL `COLLATE` o `TEMPORARY` database option.  
+  - SQL Server permite más flexibilidad con filegroups, Oracle usa tablespaces. La comparación no es directa pero conceptualmente ambos definen almacenamiento.
+
+- **SQL Server ↔ PostgreSQL:**  
+  - En PG no se especifican archivos de datos; se maneja automáticamente dentro del cluster. Traducir un script SQL Server de múltiples filegroups se reduce a crear tablespaces en PG, si es necesario.  
+  - SQL Server `LOG ON` no tiene equivalente en PG (PG registra en WAL).  
+  - El límite de bases (32767) vs ilimitado debe considerarse.  
+
+- **MySQL ↔ MariaDB:**  
+  - Prácticamente 1:1. Las bases creadas con MySQL funcionan en MariaDB. La diferencia sintáctica clave es que MariaDB acepta `OR REPLACE` y tiene la cláusula `COMMENT`.  
+  - Tip: si se ve `CREATE OR REPLACE DATABASE` en MariaDB, en MySQL habría que escribir `DROP DATABASE IF EXISTS ...; CREATE DATABASE ...;`.  
+  - Por ejemplo, equivalencia:
+    ```sql
+    -- MySQL
+    CREATE DATABASE ventas CHARACTER SET utf8mb4;
+    -- MariaDB equivalente:
+    CREATE DATABASE ventas CHARACTER SET utf8mb4;
+    ```
+  - O con reemplazo:
+    ```sql
+    -- MariaDB
+    CREATE OR REPLACE DATABASE contabilidad;
+    -- MySQL no soporta OR REPLACE: habría que:
+    DROP DATABASE IF EXISTS contabilidad;
+    CREATE DATABASE contabilidad;
+    ```
+
+- **SQL Server ↔ MySQL:**  
+  - SQL Server permite definir archivos, MySQL no. Una base T-SQL con muchos parámetros se simplifica en MySQL solo dando nombre y charset.  
+  - Ejemplo: `CREATE DATABASE Sales` (SQL Server) ≈ `CREATE DATABASE Sales` (MySQL, asumiendo privilegios).  
+  - No existe en MySQL equivalente a `ON ... LOG ON ...`; MySQL decide todo internamente.  
+
+- **PostgreSQL ↔ MySQL/MariaDB:**  
+  - Ambas son "alojadas en un servidor". Un `CREATE DATABASE` en MySQL no tiene dueño (el actual crea la DB). En PG se puede o no asignar `OWNER`.  
+  - PG puede clonar de template; MySQL siempre inicia vacía.  
+  - Sintaxis de opciones: `ENCODING` y `COLLATE` en PG se traducen a `CHARACTER SET`/`COLLATE` en MySQL.  
+  - Ejemplo: 
+    ```sql
+    -- PostgreSQL
+    CREATE DATABASE clientes WITH ENCODING='UTF8' LC_COLLATE='es_ES.utf8';
+    -- MySQL equivalente
+    CREATE DATABASE clientes DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_spanish_ci;
+    ```
+    Nótese que se busca un charset UTF-8 y un collation en español.
+
+- **SQLite ↔ Otros:**  
+  - SQLite no necesita “CREATE DATABASE”. Para mimetizar `CREATE DATABASE nombre`, se crearía un archivo `nombre.db` desde el OS o `.open nombre.db` en CLI.  
+  - Para traducir scripts: quitar la instrucción y en su lugar iniciar la conexión en el archivo deseado. P.ej., Oracle: `CREATE DATABASE ora_db;` → SQLite: `sqlite3 ora_db.db` en shell.  
+  - Si un script de otro motor tiene `CREATE DATABASE`, en SQLite se omite y se asume que el archivo con ese nombre existe (o se crea previamente con `.open`).
+
+En definitiva, la mayoría de diferencias relevantes se concentran en sintaxis de opciones (tamaños, paths, collation) y en el modelo de archivos de cada motor. Se sugiere revisar cuidadosamente las opciones soportadas al migrar código de un motor a otro.
+
+---
+
+## Migración
+
+Pasos y notas comunes al **convertir código de CREATE DATABASE entre motores**:
+
+- **Eliminar partes no aplicables:** SQLite y otros no usan la instrucción; simplemente se configura la conexión. Algunos escenarios deben adaptarse: Oracle maneja CDB/PDB, mientras que MySQL/MariaDB no; SQL Server usa filegroups, MySQL no.  
+
+- **Mapeo de opciones:**  
+  - *Archivos:* Los scripts con rutas absolutas (T-SQL) se suelen quitar o redirigir. En PostgreSQL se usan tablespaces en lugar de paths directos.  
+  - *Collation y Charset:* PostgreSQL y MySQL expresan collations distinto. Debe confirmarse que exista collation equivalente en el motor destino.  
+  - *Plantillas:* El comportamiento de `TEMPLATE` en PG no existe en MySQL/MariaDB. Un script con `TEMPLATE template1` en PG se reduce a base vacía en MySQL (sin equivalencia directa).  
+  - *Permisos:* En scripts automatizados, cambiar `AS SYSDBA` (Oracle) por CONEXIÓN de admin en otro motor; crear roles si es necesario.  
+
+- **Problemas comunes:**  
+  - Errores de sintaxis no estándar: p.ej. `IF NOT EXISTS` no soportado en Oracle/PG. Debe manejarse con lógica previa o en código de aplicación.  
+  - Personajes especiales en nombres: los engines difieren en permitir `$`, `#`, etc. Al migrar, puede haber que renombrar bases inválidas en el target.  
+  - Collations incompatibles: Si en Oracle se usa `NLS_CHARACTERSET AL32UTF8`, en MySQL hay que escoger `utf8mb4`.  
+  - Encodings: MySQL `utf8mb4` vs PG `UTF8` (equivalentes conceptualmente). Verificar que la base de datos tenga encoding correcto para datos existentes.  
+  - *OR REPLACE:* Si existe en MariaDB, al pasarlo a MySQL hay que manualmente `DROP + CREATE`.  
+  - *SQLite:* Para migrar, quitar la instrucción y en su lugar asegurarse que la BD-file exista y luego ejecutar los DDL subsecuentes.
+
+- **Herramientas:** En migraciones completas se usan utilidades (mysqldump, pg_dumpall, SQL Server Migration Assistant, etc.). Para el `CREATE DATABASE`, a veces se sugiere simplemente recrear la base vacía y luego importar los datos (más seguro).  
+
+- **Ejemplo de adaptación:**  
+  - *Oracle -> PostgreSQL:* Oracle:  
+    ```sql
+    CREATE DATABASE orcl
+      DATAFILE '/u01/data/orcl01.dbf' SIZE 500M;
+    ```  
+    PG equivalente (no usa archivos):  
+    ```sql
+    CREATE DATABASE orcl OWNER sys DBA ENCODING='UTF8' TABLESPACE pg_default;
+    ```  
+    Se ignoran rutas y tamaños, se define OWNER/encoding.
+
+  - *SQL Server -> MySQL:* SQL:  
+    ```sql
+    CREATE DATABASE shopDB
+      ON (NAME=shop_dat, FILENAME='E:\Shop\shop.mdf', SIZE=10MB);
+    ```  
+    MySQL:  
+    ```sql
+    CREATE DATABASE shopDB DEFAULT CHARACTER SET utf8mb4;
+    ```  
+    Se omite toda la parte `ON(...)` (no es aplicable en MySQL).
+
+En general, no existe una herramienta automática universal que traduzca `CREATE DATABASE` entre **todos** los motores, pues cada uno tiene características únicas. La conversión suele ser manual o guiada por scripts personalizados, considerando especialmente los aspectos de almacenamiento y configuración por defecto.
+
+---
+
+## Rendimiento
+
+Aunque `CREATE DATABASE` es una operación de configuración (no una consulta de datos), tiene implicaciones de rendimiento operacional:
+
+- **Costo (costo de ejecución):**  
+  - *Bajo (O(1))* en la mayoría de casos; crea estructuras fijas. Sin embargo, en PostgreSQL puede ser costoso si el template es grande (clonar miles de tablas implica I/O proporcional al tamaño). En Oracle, el costo inicial depende del tamaño inicial de los datafiles (autoextend puede generar I/O inicial para escribir la primer expansión).
+  - *SQL Server:* siempre implica escritura de cabeceras en los archivos y en el log; tiempo proporcional al número de archivos y tamaño inicial.
+
+- **Bloqueos:**  
+  - *SQL Server:* Bloquea el catálogo `sys.databases` mientras crea la entrada. Varias conexiones pueden leer la base master, pero no iniciar dos `CREATE DATABASE` simultáneos con el mismo nombre.  
+  - *PostgreSQL:* Obtiene un **lock ACCESS EXCLUSIVE** en `pg_database` para la plantilla usada. Esto impide consultas en la plantilla hasta completar la operación, para garantizar coherencia (coste: otras sesiones deben esperar al crear).  
+  - *MySQL/MariaDB:* No genera bloqueo global; múltiples bases se pueden crear concurrentemente, a menos que haya restricciones de filesystem.  
+  - *Oracle:* No bloquea las instancias de usuario (no hay concurrencia en ARRAYS de catálogos típicamente), pero como se realiza en NOMOUNT, básicamente implica que ningún otro comando DDL se ejecute hasta completar la operación.
+
+- **I/O y uso de disco:**  
+  - Depende del tamaño de los archivos iniciales. Ejemplos: Oracle puede tener un datafile de cientos de MB inicial. SQL Server escribe tantos MB como se especifique en `SIZE`. PostgreSQL copia catálogos (una operación de I/O completa de la plantilla).  
+  - Creación de logs: SQL Server escribe en el log transaction (`.ldf`), PostgreSQL escribe en WAL (posible impacto en almacenamiento, especial si no hay mínimos).  
+  - *Inflación del buffer pool:* En Oracle/SQL, se cargan en memoria estructuras de diccionario y páginas de arranque. PostgreSQL carga bloques por bloques (podría cachear algunos).
+
+- **Optimizer/Estadísticas:**  
+  - No aplica como en consultas. Sin embargo, tras crear una base, se usan estadísticas predeterminadas: tablas vacías. En Oracle, el inicialise de estadística no se hace al crear; en SQL Server tampoco.  
+  - *Performance después del CREATE:* afecta ejecución de futuras consultas: por ejemplo, si se define collation lenta, ordenar será más caro. Pero el comando en sí no tiene plan de consulta.
+
+- **Escalabilidad:**  
+  - *Número de BD:* SQL Server tiene límite 32k; otros prácticamente ilimitados (MySQL depende de inodos).  
+  - *SGBD en cluster:* Un gran número de bases puede consumir memoria del catalogo compartido. En PostgreSQL, cada DB tiene su propio set de memoria de trabajo, pero existen vistas globales.  
+  - *Mercado de recursos:* Los SGBD concurrentes manejan el tamaño de archivos mediante autoextensión; en sistemas con muchas bases pequeñas, el overhead de *files* puede ser un factor (p.ej. gestionar 1000 bases en MySQL crea 1000 directorios, puede afectar el sistema de archivos).
+
+- **Plan de ejecución:** No hay “plan” real como con consultas SELECT. Sin embargo, internamente, el motor realiza una secuencia de pasos (ver «Flujo interno»). Las herramientas de monitoreo mostrarían esto más bien como DDL en logs.
+
+- **Impacto en performance general:**  
+  - **SQL Server:** Tras crear una base, es buena práctica respaldar master (ver [8†L59-L66]) porque un error posterior (p.ej. fallo en escribiendo en el log de la base) puede requerir la existencia de copias.  
+  - **PostgreSQL:** CREAR muchas bases seguidas puede generar checkpoints y actividades de autovacuum en todas ellas al mismo tiempo.  
+  - **MySQL/MariaDB:** En MyISAM (no muy usado), crea un archivo .frm; en InnoDB, posible overhead de diccionario.  
+  - En general, la operación no se considera costosa a largo plazo; es más importante monitorear espacio y locks al momento.
+
+---
+
+## Internals
+
+Profundizando en detalles internos y tablas del sistema tras `CREATE DATABASE`:
+
+- **Oracle:**  
+  - *Control Files:* Se añade entrada `DB_NAME` y ubicación de archivos.  
+  - *Diccionario:* Tablas como `USER$`, `OBJ$`, `IND$`, `TAB$`, etc. se inicializan. System Trigger `startup after startup` se dispara.  
+  - *Tablespaces:* Se crean automáticamente `SYSTEM`, `SYSAUX`, `TEMP` y `UNDOTBS` (o `undo tablespace`).  
+  - *Vista de catálogos:* `DBA_DATA_FILES`, `DBA_TABLESPACES` reflejan los nuevos objetos.  
+  - *Memory:* Inicializa estructuras en SGA para la nueva BD.  
+  - *Archivos:* Las estructuras de Oracle (como header de los archivos) contienen información: nombre de base, timestamps, block size.  
+  - *Rollback y recuperación:* No aplica usualmente (la base empieza limpia).
+
+- **SQL Server:**  
+  - *sys.databases:* Nueva fila para la base con todos los valores por defecto (estado ONLINE).  
+  - *sys.master_files:* Fila para cada archivo creado.  
+  - *sys.allocation_units:* Las páginas iniciales de cada archivo aparecen como allocation units.  
+  - *Transaction Log:* Se escribe un registro DDL en el log.  
+  - *BOOT PAGE:* En primer page del data file, se almacena Database ID, etc.  
+  - *Exposición:* Vistas `sys.database_files`, `sys.filegroups` muestran el config.  
+  - *System tables:* Cualquier metadata de la base (como create date) se almacena en master.
+
+- **PostgreSQL:**  
+  - *pg_database:* Nueva entrada.  
+  - *Directories:* En `PGDATA/base/` se crea una carpeta con OID de la BD. Se copian archivos del template.  
+  - *Sistema de archivos:* Cada tablespace es una carpeta (pg_global, pg_xlog, etc).  
+  - *pg_tablespace:* Si se usa tablespace no-default, `pg_tablespace` se actualiza.  
+  - *PostgreSQL almacena:* El collation/encoding, owner y demás en `pg_database`.  
+  - *WAL:* Se emite un checkpoint antes/después del CREATE si se usa FILE_COPY (en WAL_LOG solo escribe bloques).  
+  - *pg_internal.init:* Al clonar `template0` no lleva objetos extras.
+
+- **MySQL / MariaDB:**  
+  - *MySQL 8+ (diccionario):* Inserta en `mysql.schema` (o `information_schema.schemata`).  
+  - *MyISAM (antiguo):* Crea un archivo `.frm`.  
+  - *InnoDB:* Al ser diccionario de tablas interno, puede crearse una tabla `sys_ibd` para la BD (no en sqlite; MySQL 8 usa diccionario global).  
+  - *db.opt (MariaDB):* Guarda charset y collate, y comentario (hasta 1024 bytes).  
+  - *Archivos:* Se crea carpeta con nombre de base; dentro, cada tabla futura tendrá al menos 1 archivo (InnoDB puede ser compartido en ibdata o file por table).  
+  - *Objetos del sistema:* En MySQL no hay tablas de sistema en cada base; `information_schema` y `performance_schema` manejan globalmente los metadatos.  
+
+- **SQLite:**  
+  - *Archivo:* El header 100 bytes contiene “SQLite format 3”, el tamaño de página, etc. El número de versión se guarda en la página 3.  
+  - *sqlite_master:* Se crea como una tabla en la página (con registros vacíos).  
+  - *WAL/Journal:* Si SQLite está en modo WAL, crea un archivo `wal` secundario.  
+
+Estos detalles son relevantes para debugging interno o herramientas de monitoreo.
+
+---
+
+## Errores frecuentes
+
+Algunos errores reales reportados al usar `CREATE DATABASE`, con sus explicaciones y soluciones:
+
+- **SQL Server:**  
+  - `Msg 1801, Level 16`: *Database '<name>' already exists.*  
+    - *Causa:* Intentar crear una BD con nombre duplicado.  
+    - *Solución:* Usar otro nombre, o `DROP DATABASE` antes, o verificar si existe (condición `IF NOT EXISTS` implementada por consulta).  
+  - `Msg 5173`: *'Database_name' needs to be in database 'master'.*  
+    - *Causa:* Ejecutar `CREATE DATABASE` en otra base diferente de `master`.  
+    - *Solución:* Conectar a `master` antes de crear.  
+
+- **Oracle:**  
+  - `ORA-01031: insufficient privileges`.  
+    - *Causa:* No se ejecutó como SYSDBA.  
+    - *Solución:* Conectar con SYSDBA.  
+  - `ORA-12801: error signaled in parallel query server Pxx`. A veces ocurre si no se está en NOMOUNT o si el parámetro `DB_NAME` no coincide.  
+  - `ORA-31693` con texto “file not found” si ruta no existe.  
+    - *Solución:* Corregir paths de archivos.
+
+- **PostgreSQL:**  
+  - `ERROR:  database "x" already exists`  
+    - *Causa:* Nombre duplicado.  
+    - *Solución:* Cambiar nombre o usar `DROP DATABASE` primero.  
+  - `ERROR: CREATE DATABASE cannot be executed inside a transaction block`.  
+    - *Causa:* Estaba dentro de `BEGIN...COMMIT`.  
+    - *Solución:* Ejecutar fuera de transacción.  
+  - `ERROR: permission denied to create database`  
+    - *Causa:* Usuario no es superuser ni tiene CREATEDB.  
+    - *Solución:* Conceder permiso `CREATEDB` o usar superuser.  
+
+- **MySQL:**  
+  - `ERROR 1007 (HY000): Can't create database 'X'; database exists`.  
+    - *Causa:* Base ya existe y no se usó `IF NOT EXISTS`.  
+    - *Solución:* `CREATE DATABASE IF NOT EXISTS X;`.  
+  - `ERROR 1044 (42000): Access denied for user 'u'@'h' to database 'X'`.  
+    - *Causa:* Sin privilegio `CREATE`.  
+    - *Solución:* Conceder privilegio `GRANT CREATE ON *.* TO 'u'@'h';`.  
+  - `ERROR 1005 (HY000): Can't create database 'db'; can't find file: './db/db.opt' (errno: 2 "No such file or directory")`.  
+    - *Causa:* Carpeta no creada (carpetas MyISAM).  
+    - *Solución:* Verificar permisos de OS, existencia de `datadir`.  
+
+- **MariaDB:**  
+  - `ERROR 1008 (HY000): Can't drop database 'X'; database doesn't exist`. (usando `OR REPLACE` con una BD abierta).  
+    - *Causa:* `DROP` inicial falló por DB ocupada. `OR REPLACE` implica drop previo.  
+    - *Solución:* Asegurar que nadie está usando la DB a reemplazar, o hacer manualmente.  
+
+- **SQLite:**  
+  - `Error: near "DATABASE": syntax error`.  
+    - *Causa:* Intentar usar `CREATE DATABASE` en SQLite.  
+    - *Solución:* No usar esta instrucción; en su lugar, crear archivo con `.open`.  
+
+- **Mensajes de log:** Algunos SGBD registran la acción: e.g. en el log de PostgreSQL aparecerán entradas típicas `database authorized to create templates` durante CREATE; en Oracle habrá líneas en alert log sobre creación de archivos.
+
+Equivalentes en diagnósticos entre motores:  
+  - `Permission denied`: SQL Server “requires CREATE DATABASE”, Oracle “insufficient privileges”, PostgreSQL “must be superuser or have CREATEDB”, MySQL/MariaDB “Access denied for user ... to database”.
+  - `Already exists`: SQL Server/Oracle devuelven error, MySQL con `IF NOT EXISTS` es WARNING, PostgreSQL error.  
+  - `Path not found`: Raro en MySQL, común en SQL Server/Oracle si ruta inválida.  
+  - *Consejo:* Leer el código y mensaje de error, luego revisar sección de SQL, permisos o rutas en la sintaxis.
+
+---
+
+## Buenas prácticas
+
+- **Definir parámetros desde el inicio:** Planificar `tablespaces` o `filegroups` antes de crear; no crear con todos defaults si se prevé crecimiento. Usar tamaños iniciales grandes para evitar autogrowth frecuentes.
+- **Respaldos:** Realizar **backup** del catalogo principal tras crear bases nuevas (Oracle: RMAN controlfile, SQL Server: backup de master, PostgreSQL: pg_dumpall o copiar archivos de cluster).
+- **Estandarizar collation/charset:** Establecer explícitamente juego de caracteres y collation para evitar inconsistencias. Ejemplo: siempre usar UTF-8 moderno (`utf8mb4`) en nuevas bases MySQL.
+- **Evitar OR REPLACE indiscriminado:** En MariaDB, usar `OR REPLACE` solo cuando se entienda que se eliminarán datos antiguos. Para migraciones, mejor script separado que `DROP` y `CREATE`.
+- **Control de usuarios:** Restricción de permisos a roles de DBA. No conceder `CREATE DATABASE` a usuarios normales (excepción: entornos de pruebas controlados).
+- **Nombres consistentes:** Seguir convención para nombres de bases (sin espacios, con prefijos, etc.) para facilitar scripts automatizados.  
+- **Atención a plataformas:** En SQL Server, cuidar la compatibilidad de ruta (no usar rutas locales en Azure). En Oracle, usar `ORACLE_HOME` y variables de ambiente en lugar de rutas absolutas de sistema.
+- **Opciones de seguridad:** En MySQL Enterprise, si no se va a cifrar, no permitir a usuarios crear con ENCRYPTION=Y sin control; en Oracle, después de crear DB nueva, ejecutar el Checklist de seguridad (según [1†L16-L20]).
+- **Testing:** Realizar la operación en entornos de staging primero. Revise los mensajes de alerta/log por problemas.
+
+En resumen, tratar `CREATE DATABASE` como una operación administrativa crítica, con planificación de recursos y permisos adecuados.
+
+---
+
+## Anti-patrones
+
+- **Usar `DROP DATABASE` para resetear datos en producción:** En lugar de vaciar tablas, eliminar completamente la base (y luego recrear) suele ser peligroso; puede ignorar restricciones de multiusuario y eliminar esquema/diccionario.  
+- **No revisar existencia de la BD:** Ejecutar CREATE sin IF NOT EXISTS en entornos automatizados lleva a fallos inesperados.  
+- **Copia de ruta/hardcode OS:** Incluir rutas absolutas de archivos (ej. `C:\...`) hace el script no portable. Mejor usar variables o configuraciones por servidor.  
+- **Ignorar informes de errores:** Al fallar la creación, a veces el script continúa creando tablas sobre la base equivocada. Siempre verificar que `CREATE DATABASE` haya concluido con éxito antes de otros DDL.  
+- **Creación masiva innecesaria:** En entornos de multiusuario, crear una base por usuario puede fragmentar recursos; mejor usar esquemas o cuotas.  
+- **Asumir comportamientos entre versiones:** El código que funcionaba en MySQL 5.7 sin OR REPLACE, al migrar a MariaDB 10.5 podría fallar si no se ajusta. Revisar la documentación de la versión destino.
+
+---
+
+## Ejercicios
+
+**Nivel Básico:** Crear y verificar bases de datos simples.  
+1. En MySQL, crea la base de datos `bd_prueba1` con charset `utf8mb4`. Verifica su collation por defecto.  
+2. En SQL Server, crea una base `BD_Juegos` con tamaño inicial de 20MB y comprueba su ubicación en disco.  
+
+**Nivel Intermedio:** Configuración y validación.  
+3. En PostgreSQL, crea la base `db_tienda` con propietario `ventas_usr`, encoding `LATIN1` y locale `es_ES`. Conecta a ella y comprueba sus collation con `SHOW LC_COLLATE`.  
+4. En MariaDB, crea o reemplaza (`OR REPLACE`) la base `clientes` con comment largo (>50 caracteres). Observa la entrada en `information_schema.schemata`.  
+
+**Nivel Avanzado:** Migración y compatibilidad.  
+5. Migración: Explica cómo convertir el script T-SQL de creación de base con archivos a un script de PostgreSQL. Incluye el tratamiento de owner y encoding.  
+6. En Oracle, simula un error de tamaño de datafile (elige `SIZE 0M`) y describe el mensaje obtenido. ¿Cómo lo corregirías?  
+
+**Nivel Experto:** Casos de extremo y resolución de problemas.  
+7. Intenta crear 300 bases de datos pequeñas en MySQL o MariaDB mediante script (p.ej. usando un loop). ¿Qué observas en el sistema de archivos? ¿Hay algún límite práctico alcanzable?  
+8. En PostgreSQL, provoca el error de conexión concurrente al template: mientras un `CREATE DATABASE` se ejecuta con template `template1`, intenta conectarte a `template1` desde otra sesión. Describe el resultado.  
+
+---
+
+## Preguntas frecuentes (FAQ)
+
+- **¿Por qué en SQLite no existe `CREATE DATABASE`?**  
+  Porque SQLite guarda cada base de datos en un archivo. No hay un gestor de instancias multi-base; basta crear (o abrir) un archivo de base nuevo. Se usa `.open` en CLI o `ATTACH DATABASE`.  
+
+- **¿Se pueden crear usuarios/roles simultáneamente en `CREATE DATABASE`?**  
+  Oracle lo permite en el mismo script, pero son cláusulas separadas (`USER SYS IDENTIFIED BY...`). En PostgreSQL se asigna owner con `WITH OWNER = user`. En MySQL/MariaDB no; hay que crear el usuario con `CREATE USER` aparte y luego GRANT.
+
+- **Diferencia entre IF NOT EXISTS y OR REPLACE:**  
+  `IF NOT EXISTS` previene error al existir la BD; no la modifica. `OR REPLACE` elimina la base existente antes de crear una nueva (solo en MariaDB). Usar con precaución para no borrar datos sin querer.
+
+- **¿Por qué `CREATE DATABASE` falla con “permission denied” aunque soy administrador?**  
+  Verificar: en SQL Server debe ser en master; en PostgreSQL el rol debe tener `CREATEDB` o ser superuser; en MySQL podría no tener permiso global `CREATE`. En Oracle, asegurarse de estar como SYSDBA.
+
+- **¿Qué diferencia hay entre `CREATE DATABASE` y `CREATE SCHEMA`?**  
+  - *Oracle:* No existe `SCHEMA`, un **esquema** es el mismo que un usuario (que se crea con `CREATE USER`).  
+  - *SQL Server:* `CREATE SCHEMA` crea un esquema dentro de una base, distinto de `CREATE DATABASE`.  
+  - *MySQL/MariaDB:* `SCHEMA` es sinónimo de `DATABASE`.  
+  - *PostgreSQL:* `CREATE SCHEMA` crea un namespace dentro de la base, no una base.  
+
+- **¿Se puede crear una base de datos con opciones de performance o solo con estructura?**  
+  `CREATE DATABASE` solo define estructura inicial (espacios en disco, collation, propietario). No optimiza datos (porque no hay) ni define índices (no hay tablas). El rendimiento se determina luego al crear tablas e índices.
+
+- **¿Qué ocurre si se ejecuta `CREATE DATABASE` con nombre en mayúsculas o con espacios?**  
+  - Algunos sistemas son case-insensitive por defecto (Oracle, MySQL en Windows).  
+  - En SQL Server y PostgreSQL, usar comillas dobles preserva el case o permite espacios: p.ej. `CREATE DATABASE "Mi Base"`.  
+  - Sin comillas, se normaliza (PG a minúsculas, Oracle a mayúsculas). Evitar espacios para portabilidad.
+
+- **¿Cuál es la diferencia entre archivo `.mdf` y `.ndf` en SQL Server al crear la base?**  
+  `.mdf` es el archivo primario principal. Los `.ndf` son archivos secundarios opcionales. Se pueden especificar múltiples archivos en una filegroup.
+
+- **¿Cómo ver la collation por defecto en PostgreSQL tras crear la base?**  
+  Ejecutar `SELECT datname, datcollate FROM pg_database WHERE datname='nombre_bd';`.
+
+- **¿Qué error da Oracle si no está en NOMOUNT?**  
+  Normalmente ORA-01017 o similar: hay que iniciar la instancia en NOMOUNT (`STARTUP NOMOUNT` en SQL*Plus) antes de CREATE.
+
+Para más preguntas, consulte la documentación oficial referenciada abajo.
+
+---
+
+## Referencias oficiales
+
+- **Oracle Database SQL Language Reference – `CREATE DATABASE`.** Oracle 19c.  
+- **Microsoft Learn – Crear una base de datos (SQL Server).** Documentación sobre `CREATE DATABASE` en Transact-SQL.  
+- **Microsoft Learn – Base de datos de SQL Server: archivos y filegroups.** Explicación de estructuras de archivo.  
+- **PostgreSQL Documentation – CREATE DATABASE.** Versión actual (SQL). Explica parámetros y detalles de creación.  
+- **MySQL Reference Manual – CREATE DATABASE (versión 9.7).** Sintaxis oficial y notas (caracteres, encriptación, implementacion).  
+- **MariaDB Knowledge Base – CREATE DATABASE.** Guía de sintaxis y opciones (incluye `OR REPLACE`, `COMMENT`).  
+- **SQLite Documentation – Quickstart (5 minutos).** Describe creación de bases usando CLI (no `CREATE DATABASE` en SQL).  
+- **ANSI/ISO SQL Standard:** No define `CREATE DATABASE` (ver nota comparativa de PostgreSQL).  
+- **Documentación Adicional:** Vea también los capítulos de *Tablespaces*, *Schemes/Filegroups*, *Privileges* en las guías oficiales de cada motor.
+
+Estos recursos son fuentes primarias que validan la sintaxis y comportamientos mencionados. El análisis y las comparaciones aquí expuestas se basan en ellos para garantizar exactitud.

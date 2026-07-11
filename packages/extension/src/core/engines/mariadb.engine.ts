@@ -19,7 +19,7 @@ export const mariadbEngine: EngineDefinition = {
     command: 'mariadb',
     argsTemplate: '-h {host} -P {port} -u {user} -p{password} {database}',
     defaultUser: 'labuser',
-    defaultPassword: 'labpassword',
+    defaultPassword: 'LabPassword123!',
     defaultDatabase: 'labdb',
     adminUser: 'root',
     adminPassword: '',

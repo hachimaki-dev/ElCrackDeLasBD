@@ -1,0 +1,1 @@
+{"version":3,"file":"configProvider.d.ts","sourceRoot":"","sources":["../../../src/vscode/configProvider.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAGH,OAAO,EAAE,qBAAqB,EAAE,YAAY,EAAE,MAAM,8BAA8B,CAAC;AAEnF,qBAAa,2BAA4B,YAAW,qBAAqB;IACvE,SAAS,IAAI,YAAY;CAS1B"}

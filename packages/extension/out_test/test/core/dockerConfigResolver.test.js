@@ -2,79 +2,107 @@
 /**
  * Tests para el resolvedor de configuración de Docker (dockerConfigResolver).
  */
-var __assign = (this && this.__assign) || function () {
-    __assign = Object.assign || function(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                t[p] = s[p];
-        }
-        return t;
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
     };
-    return __assign.apply(this, arguments);
-};
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var assert = require("assert");
-var path = require("path");
-var dockerConfigResolver_1 = require("../../src/core/docker/dockerConfigResolver");
-suite('Docker Config Resolver', function () {
+const assert = __importStar(require("assert"));
+const path = __importStar(require("path"));
+const dockerConfigResolver_1 = require("../../src/core/docker/dockerConfigResolver");
+suite('Docker Config Resolver', () => {
     // Helper para construir un entorno mockeado limpio
-    function createMockEnv(overrides) {
-        if (overrides === void 0) { overrides = {}; }
-        var files = {};
-        var directories = {};
-        return __assign({ env: {}, platform: 'linux', homedir: '/home/user', fsExistsSync: function (p) {
+    function createMockEnv(overrides = {}) {
+        const files = {};
+        const directories = {};
+        return {
+            env: {},
+            platform: 'linux',
+            homedir: '/home/user',
+            fsExistsSync: (p) => {
                 return p in files || p in directories;
-            }, fsReadFileSync: function (p) {
+            },
+            fsReadFileSync: (p) => {
                 if (p in files) {
                     return files[p];
                 }
-                throw new Error("File not found: ".concat(p));
-            }, fsReaddirSync: function (p) {
+                throw new Error(`File not found: ${p}`);
+            },
+            fsReaddirSync: (p) => {
                 if (p in directories) {
                     return directories[p];
                 }
-                throw new Error("Directory not found: ".concat(p));
-            } }, overrides);
+                throw new Error(`Directory not found: ${p}`);
+            },
+            ...overrides,
+        };
     }
-    test('respeta DOCKER_HOST con unix://', function () {
-        var mockEnv = createMockEnv({
+    test('respeta DOCKER_HOST con unix://', () => {
+        const mockEnv = createMockEnv({
             env: { DOCKER_HOST: 'unix:///var/run/custom.sock' },
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '/var/run/custom.sock' });
     });
-    test('respeta DOCKER_HOST con npipe://', function () {
-        var mockEnv = createMockEnv({
+    test('respeta DOCKER_HOST con npipe://', () => {
+        const mockEnv = createMockEnv({
             env: { DOCKER_HOST: 'npipe:////./pipe/custom_engine' },
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '//./pipe/custom_engine' });
     });
-    test('respeta DOCKER_HOST con tcp://', function () {
-        var mockEnv = createMockEnv({
+    test('respeta DOCKER_HOST con tcp://', () => {
+        const mockEnv = createMockEnv({
             env: { DOCKER_HOST: 'tcp://127.0.0.1:4243' },
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { host: '127.0.0.1', port: 4243 });
     });
-    test('respeta DOCKER_HOST con tcp:// sin puerto', function () {
-        var mockEnv = createMockEnv({
+    test('respeta DOCKER_HOST con tcp:// sin puerto', () => {
+        const mockEnv = createMockEnv({
             env: { DOCKER_HOST: 'tcp://10.0.0.1' },
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { host: '10.0.0.1', port: 2375 });
     });
-    test('lee el contexto activo desde ~/.docker/config.json y resuelve su meta.json', function () {
-        var _a, _b;
-        var homedir = '/home/user';
-        var configPath = path.join(homedir, '.docker', 'config.json');
-        var metaDir = path.join(homedir, '.docker', 'contexts', 'meta');
-        var contextHash = 'a1b2c3d4';
-        var metaJsonPath = path.join(metaDir, contextHash, 'meta.json');
-        var files = (_a = {},
-            _a[configPath] = JSON.stringify({ currentContext: 'desktop-linux' }),
-            _a[metaJsonPath] = JSON.stringify({
+    test('lee el contexto activo desde ~/.docker/config.json y resuelve su meta.json', () => {
+        const homedir = '/home/user';
+        const configPath = path.join(homedir, '.docker', 'config.json');
+        const metaDir = path.join(homedir, '.docker', 'contexts', 'meta');
+        const contextHash = 'a1b2c3d4';
+        const metaJsonPath = path.join(metaDir, contextHash, 'meta.json');
+        const files = {
+            [configPath]: JSON.stringify({ currentContext: 'desktop-linux' }),
+            [metaJsonPath]: JSON.stringify({
                 Name: 'desktop-linux',
                 Endpoints: {
                     docker: {
@@ -82,105 +110,153 @@ suite('Docker Config Resolver', function () {
                     },
                 },
             }),
-            _a);
-        var directories = (_b = {},
-            _b[metaDir] = [contextHash],
-            _b);
-        var mockEnv = createMockEnv({
-            homedir: homedir,
-            fsExistsSync: function (p) { return p in files || p in directories; },
-            fsReadFileSync: function (p) { return files[p]; },
-            fsReaddirSync: function (p) { return directories[p]; },
+        };
+        const directories = {
+            [metaDir]: [contextHash],
+        };
+        const mockEnv = createMockEnv({
+            homedir,
+            fsExistsSync: (p) => p in files || p in directories,
+            fsReadFileSync: (p) => files[p],
+            fsReaddirSync: (p) => directories[p],
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '/home/user/.docker/desktop/docker.sock' });
     });
-    test('ignora contexto si es default y procede al fallback de plataformas', function () {
-        var _a;
-        var homedir = '/home/user';
-        var configPath = path.join(homedir, '.docker', 'config.json');
-        var defaultSock = '/var/run/docker.sock';
-        var files = (_a = {},
-            _a[configPath] = JSON.stringify({ currentContext: 'default' }),
-            _a[defaultSock] = '',
-            _a);
-        var mockEnv = createMockEnv({
-            homedir: homedir,
-            fsExistsSync: function (p) { return p in files; },
-            fsReadFileSync: function (p) { return files[p]; },
+    test('ignora contexto si es default y procede al fallback de plataformas', () => {
+        const homedir = '/home/user';
+        const configPath = path.join(homedir, '.docker', 'config.json');
+        const defaultSock = '/var/run/docker.sock';
+        const files = {
+            [configPath]: JSON.stringify({ currentContext: 'default' }),
+            [defaultSock]: '',
+        };
+        const mockEnv = createMockEnv({
+            homedir,
+            fsExistsSync: (p) => p in files,
+            fsReadFileSync: (p) => files[p],
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '/var/run/docker.sock' });
     });
-    test('retorna pipe de Windows en plataforma win32', function () {
-        var mockEnv = createMockEnv({
+    test('retorna pipe de Windows en plataforma win32', () => {
+        const mockEnv = createMockEnv({
             platform: 'win32',
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '//./pipe/docker_engine' });
     });
-    test('prueba los fallbacks de unix en orden: /var/run/docker.sock', function () {
-        var _a;
-        var targetPath = '/var/run/docker.sock';
-        var files = (_a = {},
-            _a[targetPath] = '',
-            _a);
-        var mockEnv = createMockEnv({
+    test('prueba los fallbacks de unix en orden: /var/run/docker.sock', () => {
+        const targetPath = '/var/run/docker.sock';
+        const files = {
+            [targetPath]: '',
+        };
+        const mockEnv = createMockEnv({
             platform: 'linux',
-            fsExistsSync: function (p) { return p in files; },
+            fsExistsSync: (p) => p in files,
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: targetPath });
     });
-    test('prueba los fallbacks de unix en orden: /run/docker.sock', function () {
-        var _a;
-        var targetPath = '/run/docker.sock';
-        var files = (_a = {},
-            _a[targetPath] = '',
-            _a);
-        var mockEnv = createMockEnv({
+    test('prueba los fallbacks de unix en orden: /run/docker.sock', () => {
+        const targetPath = '/run/docker.sock';
+        const files = {
+            [targetPath]: '',
+        };
+        const mockEnv = createMockEnv({
             platform: 'linux',
-            fsExistsSync: function (p) { return p in files; },
+            fsExistsSync: (p) => p in files,
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: targetPath });
     });
-    test('prueba los fallbacks de unix en orden: ~/.docker/run/docker.sock', function () {
-        var _a;
-        var homedir = '/home/user';
-        var targetPath = path.join(homedir, '.docker', 'run', 'docker.sock');
-        var files = (_a = {},
-            _a[targetPath] = '',
-            _a);
-        var mockEnv = createMockEnv({
+    test('prueba los fallbacks de unix en orden: ~/.docker/run/docker.sock', () => {
+        const homedir = '/home/user';
+        const targetPath = path.join(homedir, '.docker', 'run', 'docker.sock');
+        const files = {
+            [targetPath]: '',
+        };
+        const mockEnv = createMockEnv({
             platform: 'linux',
-            homedir: homedir,
-            fsExistsSync: function (p) { return p in files; },
+            homedir,
+            fsExistsSync: (p) => p in files,
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: targetPath });
     });
-    test('prueba los fallbacks de unix en orden: ~/.docker/desktop/docker.sock', function () {
-        var _a;
-        var homedir = '/home/user';
-        var targetPath = path.join(homedir, '.docker', 'desktop', 'docker.sock');
-        var files = (_a = {},
-            _a[targetPath] = '',
-            _a);
-        var mockEnv = createMockEnv({
+    test('prueba los fallbacks de unix en orden: ~/.docker/desktop/docker.sock', () => {
+        const homedir = '/home/user';
+        const targetPath = path.join(homedir, '.docker', 'desktop', 'docker.sock');
+        const files = {
+            [targetPath]: '',
+        };
+        const mockEnv = createMockEnv({
             platform: 'linux',
-            homedir: homedir,
-            fsExistsSync: function (p) { return p in files; },
+            homedir,
+            fsExistsSync: (p) => p in files,
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: targetPath });
     });
-    test('retorna el socket por defecto de Unix si ninguna ruta candidata existe', function () {
-        var mockEnv = createMockEnv({
+    test('retorna el socket por defecto de Unix si ninguna ruta candidata existe', () => {
+        const mockEnv = createMockEnv({
             platform: 'linux',
-            fsExistsSync: function () { return false; },
+            fsExistsSync: () => false,
         });
-        var options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
         assert.deepStrictEqual(options, { socketPath: '/var/run/docker.sock' });
     });
+    test('resuelve el socket de macOS Docker Desktop con contexto desktop-linux (caso real Mac M1)', () => {
+        const homedir = '/Users/hachimaki';
+        const configPath = path.join(homedir, '.docker', 'config.json');
+        const metaDir = path.join(homedir, '.docker', 'contexts', 'meta');
+        const contextHash = 'fe9c6bd7a66301f49ca9b6a70b217107';
+        const metaJsonPath = path.join(metaDir, contextHash, 'meta.json');
+        const files = {
+            [configPath]: JSON.stringify({ currentContext: 'desktop-linux' }),
+            [metaJsonPath]: JSON.stringify({
+                Name: 'desktop-linux',
+                Endpoints: {
+                    docker: {
+                        Host: 'unix:///Users/hachimaki/.docker/run/docker.sock',
+                    },
+                },
+            }),
+        };
+        const directories = {
+            [metaDir]: [contextHash],
+        };
+        const mockEnv = createMockEnv({
+            platform: 'darwin',
+            homedir,
+            fsExistsSync: (p) => p in files || p in directories,
+            fsReadFileSync: (p) => files[p],
+            fsReaddirSync: (p) => directories[p],
+        });
+        const options = (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        assert.deepStrictEqual(options, {
+            socketPath: '/Users/hachimaki/.docker/run/docker.sock',
+        });
+    });
+    test('el callback onLog recibe mensajes de resolución', () => {
+        const logs = [];
+        const mockEnv = createMockEnv({
+            platform: 'linux',
+            fsExistsSync: () => false,
+            onLog: (msg) => logs.push(msg),
+        });
+        (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv);
+        assert.ok(logs.length > 0, 'Debería haber al menos un mensaje de log');
+        assert.ok(logs.some(log => log.includes('platform')), 'Debería mencionar la plataforma');
+        assert.ok(logs.some(log => log.includes('candidates') || log.includes('socket')), 'Debería mencionar la búsqueda de sockets');
+    });
+    test('el callback onLog no falla si no se provee', () => {
+        const mockEnv = createMockEnv({
+            platform: 'linux',
+            fsExistsSync: () => false,
+        });
+        // No debería lanzar error aunque no haya onLog
+        assert.doesNotThrow(() => (0, dockerConfigResolver_1.resolveDockerOptions)(mockEnv));
+    });
 });
+//# sourceMappingURL=dockerConfigResolver.test.js.map

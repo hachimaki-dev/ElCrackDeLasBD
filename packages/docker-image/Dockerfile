@@ -6,7 +6,14 @@
 #
 # Motores soportados: postgres, mysql, mariadb, sqlite, oracle, sqlserver
 #
-# Build multi-arquitectura:
+# Compatibilidad de arquitecturas:
+#   - arm64 nativo: postgres, mysql, mariadb, sqlite, oracle (gvenzl/oracle-free 23.5+)
+#   - amd64 only (emulación en arm64): sqlserver (limitación de Microsoft)
+#
+# Build para desarrollo local (usa la arch nativa del host):
+#   docker build -t sql-engine-lab:dev .
+#
+# Build multi-arquitectura para publicación:
 #   docker buildx build --platform linux/amd64,linux/arm64 \
 #     -t hachimakidev/sql-engine-lab:latest --push .
 #
@@ -16,18 +23,29 @@
 
 # ==================================================================
 # Stage 1: Oracle base — extraer binarios de gvenzl/oracle-free
+# Soporta arm64 nativo desde 23.5 — NO forzar --platform=linux/amd64
+# Ref: https://hub.docker.com/r/gvenzl/oracle-free
 # ==================================================================
-FROM --platform=linux/amd64 gvenzl/oracle-free:23.5-slim AS oracle-stage
+FROM gvenzl/oracle-free:23.5-slim AS oracle-stage
 
 # ==================================================================
-# Stage 2: SQL Server base — extraer binarios de mcr.microsoft.com/mssql/server
+# Stage 2: SQL Server base
+# Microsoft NO publica imagen arm64 para mssql-server, así que usamos
+# mssql-server (amd64) forzada para todas las arquitecturas.
+# ==================================================================
+# Stage 2: SQL Server base
+# Microsoft NO publica imagen arm64 para mssql-server, así que usamos
+# mssql-server (amd64) forzada para todas las arquitecturas.
 # ==================================================================
 FROM --platform=linux/amd64 mcr.microsoft.com/mssql/server:2022-latest AS sqlserver-stage
 
 # ==================================================================
-# Stage 3: Final — debian:bookworm-slim con todos los motores
+# Stage 3: Final — debian:bookworm-slim
+# Sin --platform para que use la arquitectura nativa del host.
+# Esto permite que postgres, mysql, mariadb, sqlite y oracle
+# corran nativos en arm64 (Apple Silicon) sin emulación.
 # ==================================================================
-FROM --platform=linux/amd64 debian:bookworm-slim AS final
+FROM debian:bookworm-slim AS final
 
 LABEL maintainer="SQL Engine Laboratory"
 LABEL description="Multi-engine SQL laboratory — one engine at a time via ENV ENGINE"
@@ -94,6 +112,7 @@ RUN groupadd -g 54321 oinstall \
 # ---- Copiar Oracle Free desde stage ----
 # Copiamos el Oracle Home completo y dependencias necesarias con los permisos correctos
 COPY --chown=oracle:dba --from=oracle-stage /opt/oracle /opt/oracle
+COPY --chown=oracle:dba --from=oracle-stage /usr/bin/7zzs /usr/bin/7zzs
 
 # Instalar dependencias de runtime para Oracle
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -101,30 +120,75 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Variables de entorno para Oracle
+ENV ORACLE_BASE=/opt/oracle
+ENV ORACLE_BASE_CONFIG=/opt/oracle/product/23ai/dbhomeFree
+ENV ORACLE_BASE_HOME=/opt/oracle/product/23ai/dbhomeFree
 ENV ORACLE_HOME=/opt/oracle/product/23ai/dbhomeFree
-ENV PATH="${ORACLE_HOME}/bin:${PATH}"
 ENV ORACLE_SID=FREE
+ENV NLS_LANG=.AL32UTF8
+ENV PATH="${ORACLE_HOME}/bin:/opt/oracle:${PATH}"
 
 # ---- Copiar SQL Server desde stage ----
 COPY --chown=mssql:mssql --from=sqlserver-stage /opt/mssql /opt/mssql
-
-# Instalar dependencias de runtime para SQL Server
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libldap-2.5-0 \
-    libsasl2-2 \
-    libsss-nss-idmap0 \
-    libatomic1 \
+# Copiar herramientas de cliente SQL Server (sqlcmd) desde el stage
+COPY --from=sqlserver-stage /opt/mssql-tools18 /opt/mssql-tools18
+RUN HOSTARCH=$(dpkg --print-architecture) && \
+    if [ "$HOSTARCH" = "arm64" ]; then \
+      dpkg --add-architecture amd64 && apt-get update && apt-get install -y --no-install-recommends \
+      libldap-2.5-0:amd64 \
+      libsasl2-2:amd64 \
+      libsss-nss-idmap0:amd64 \
+      libatomic1:amd64 \
+      libnuma1:amd64 \
+      libgssapi-krb5-2:amd64 \
+      libkrb5-3:amd64 \
+      libk5crypto3:amd64 \
+      libcom-err2:amd64 \
+      libuuid1:amd64 \
+      libpam0g:amd64 \
+      libudev1:amd64 \
+      libssl3:amd64 \
+      libc6:amd64 \
+      libstdc++6:amd64 \
+      libgcc-s1:amd64 \
+      zlib1g:amd64 \
+      libkeyutils1:amd64 \
+      libaudit1:amd64 \
+      libcap-ng0:amd64 \
+      unixodbc \
+      bzip2 \
+      && curl -L https://github.com/microsoft/go-sqlcmd/releases/download/v1.8.2/sqlcmd-linux-arm64.tar.bz2 -o /tmp/sqlcmd.tar.bz2 \
+      && tar -xvjf /tmp/sqlcmd.tar.bz2 -C /tmp \
+      && mkdir -p /opt/mssql-tools18/bin \
+      && mv /tmp/sqlcmd /opt/mssql-tools18/bin/sqlcmd \
+      && chmod +x /opt/mssql-tools18/bin/sqlcmd \
+      && rm -f /tmp/sqlcmd.tar.bz2; \
+    else \
+      apt-get update && apt-get install -y --no-install-recommends \
+      libldap-2.5-0 \
+      libsasl2-2 \
+      libsss-nss-idmap0 \
+      libatomic1 \
+      libnuma1 \
+      libgssapi-krb5-2 \
+      libkrb5-3 \
+      libk5crypto3 \
+      libcom-err2 \
+      libuuid1 \
+      libpam0g \
+      libudev1 \
+      libssl3 \
+      libc6 \
+      libstdc++6 \
+      libgcc-s1 \
+      zlib1g \
+      libkeyutils1 \
+      libaudit1 \
+      libcap-ng0 \
+      unixodbc; \
+    fi \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /opt/mssql/bin/sqlservr /usr/local/bin/sqlservr
-
-# Instalar herramientas de cliente SQL Server (sqlcmd)
-RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
-       > /etc/apt/sources.list.d/mssql-release.list \
-    && apt-get update && ACCEPT_EULA=Y apt-get install -y --no-install-recommends \
-       mssql-tools18 \
-       unixodbc \
-    && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/mssql-tools18/bin:${PATH}"
 
