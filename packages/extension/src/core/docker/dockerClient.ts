@@ -279,11 +279,13 @@ export class DockerClient {
    * @param containerName - Nombre del contenedor
    * @returns El estado ('starting', 'healthy', 'unhealthy') o null si no tiene healthcheck o no existe.
    */
-  async getContainerHealthStatus(containerName: string): Promise<'starting' | 'healthy' | 'unhealthy' | null> {
+  async getContainerHealthStatus(
+    containerName: string,
+  ): Promise<'starting' | 'healthy' | 'unhealthy' | null> {
     try {
       const container = await this.getContainerByName(containerName);
       if (!container) return null;
-      
+
       const info = await container.inspect();
       return (info.State as any).Health?.Status ?? null;
     } catch {
@@ -341,7 +343,12 @@ export class DockerClient {
           try {
             const inspect = await exec.inspect();
             if (inspect.ExitCode !== 0) {
-              resolve(failure({ code: 'DOCKER_EXEC_FAILED', message: `Comando falló con exit code ${inspect.ExitCode}. Stderr: ${stderr}` }));
+              resolve(
+                failure({
+                  code: 'DOCKER_EXEC_FAILED',
+                  message: `Comando falló con exit code ${inspect.ExitCode}. Stderr: ${stderr}`,
+                }),
+              );
             } else {
               resolve(success({ stdout, stderr }));
             }

@@ -2,9 +2,6 @@
 
 ## En progreso
 _(nada)_
-
-
-
 ## Listo para tomar (Próximos pasos post-MVP)
 
 ### Imagen Docker
@@ -68,3 +65,4 @@ _(nada)_
 - [x] Sincronización de contraseñas persistentes y resolución de timeouts de arranque para todos los motores, delegando la inicialización de Oracle al script nativo de gvenzl (agente: antigravity, completado 2026-07-11)
 - [x] Reestructuración multi-stage dinámica (`TARGETARCH`) del Dockerfile para habilitar soporte nativo ARM64 de SQL Server usando Azure SQL Edge, y corrección de entrypoint de Oracle Free (agente: antigravity, completado 2026-07-11)
 - [x] Creación de Hojas SQL interactivas con ejecución remota vía docker exec y gestor de perfiles persistentes, manteniendo abstracción del ciclo de vida de motores (agente: antigravity, completado 2026-07-11)
+- [x] Rediseño de interfaz de tutoriales estilo "Hackerman Profesional" sofisticado y arquitectura de libro con capítulos interactivos y secciones de datos enriquecidos (agente: antigravity, completado 2026-07-12)

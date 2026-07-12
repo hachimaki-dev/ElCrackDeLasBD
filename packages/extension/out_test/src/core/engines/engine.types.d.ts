@@ -51,6 +51,8 @@ export interface EngineDefinition {
     readonly id: EngineId;
     /** Nombre para mostrar en la UI */
     readonly displayName: string;
+    /** Tamaño de memoria compartida (shm-size) en bytes necesario para el contenedor en Docker */
+    readonly dockerShmSize?: number;
     /** Descripción corta del motor */
     readonly description: string;
     /** Puerto por defecto del motor (0 para SQLite que no usa puerto) */
@@ -164,7 +166,7 @@ export declare function failure<E>(error: E): Failure<E>;
  * Códigos de error conocidos del sistema.
  * Cada código mapea a un tipo de error esperado y manejable.
  */
-export type EngineErrorCode = 'DOCKER_NOT_RUNNING' | 'DOCKER_PULL_FAILED' | 'ENGINE_START_FAILED' | 'ENGINE_STOP_FAILED' | 'ENGINE_ALREADY_RUNNING' | 'PORT_IN_USE' | 'HEALTHCHECK_FAILED' | 'HEALTHCHECK_TIMEOUT' | 'UNKNOWN_ENGINE' | 'CONTAINER_ERROR';
+export type EngineErrorCode = 'DOCKER_NOT_RUNNING' | 'DOCKER_PULL_FAILED' | 'ENGINE_START_FAILED' | 'ENGINE_STOP_FAILED' | 'ENGINE_ALREADY_RUNNING' | 'PORT_IN_USE' | 'HEALTHCHECK_FAILED' | 'HEALTHCHECK_TIMEOUT' | 'UNKNOWN_ENGINE' | 'WEAK_PASSWORD' | 'CONTAINER_ERROR' | 'QUERY_EXECUTION_FAILED' | 'DOCKER_EXEC_FAILED' | 'ENGINE_NOT_FOUND';
 /**
  * Error tipado del sistema de motores.
  * Contiene un código para que el llamador pueda tomar decisiones
@@ -197,22 +199,15 @@ export interface PullProgress {
     /** Mensaje de estado del pull */
     readonly status: string;
 }
+export declare const LAB_CONTRACT: any;
 /**
  * Configuración de la imagen Docker del laboratorio.
  */
 export declare const DOCKER_IMAGE_CONFIG: {
-    /** Nombre de la imagen en Docker Hub */
-    readonly imageName: "sql-engine-lab";
-    /** Tag de la imagen */
-    readonly imageTag: "dev";
-    /** Nombre del contenedor que crea la extensión */
-    readonly containerName: "sql-engine-lab";
-    /** Variables de entorno por defecto */
-    readonly defaultEnv: {
-        readonly LAB_USER: "labuser";
-        readonly LAB_PASSWORD: "labpassword";
-        readonly LAB_DATABASE: "labdb";
-    };
+    readonly imageName: any;
+    readonly imageTag: any;
+    readonly containerName: any;
+    readonly defaultEnv: any;
 };
 /**
  * Configuración de credenciales definida por el usuario.

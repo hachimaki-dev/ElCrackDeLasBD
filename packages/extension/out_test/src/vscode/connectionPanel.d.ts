@@ -7,19 +7,20 @@
 import * as vscode from 'vscode';
 import { ConnectionInfo, EngineDefinition, EngineStatus } from '../core/engines/engine.types';
 export declare class ConnectionPanel {
+    private readonly extensionUri;
     private static currentPanel;
     private readonly panel;
     private currentEngine;
     private currentInfo?;
     private currentStatus?;
-    private loadingMessage?;
+    private completedModules;
     private constructor();
-    static createOrReveal(extensionUri: vscode.Uri, engine: EngineDefinition, connectionInfo: ConnectionInfo): void;
-    static createOrRevealLoading(extensionUri: vscode.Uri, engine: EngineDefinition, status: EngineStatus, message?: string): void;
+    static createOrReveal(extensionUri: vscode.Uri, engine: EngineDefinition, connectionInfo: ConnectionInfo, status?: EngineStatus, completedModules?: string[]): void;
+    static createOrRevealLoading(extensionUri: vscode.Uri, engine: EngineDefinition, status: EngineStatus, message?: string, completedModules?: string[]): void;
     private static show;
     static dispose(): void;
+    private loadTutorials;
     private update;
     private buildHtml;
-    private escape;
 }
 //# sourceMappingURL=connectionPanel.d.ts.map

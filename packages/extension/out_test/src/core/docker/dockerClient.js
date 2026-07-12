@@ -166,6 +166,9 @@ class DockerClient {
             if (options.shmSize) {
                 hostConfig.ShmSize = options.shmSize;
             }
+            if (options.binds && options.binds.length > 0) {
+                hostConfig.Binds = options.binds;
+            }
             const container = await this.docker.createContainer({
                 name: options.name,
                 Image: options.image,
@@ -259,6 +262,66 @@ class DockerClient {
         }
         catch {
             return null;
+        }
+    }
+    /**
+     * Ejecuta un comando dentro de un contenedor en ejecución.
+     *
+     * @param containerName - Nombre del contenedor
+     * @param cmd - Comando a ejecutar (ej. ['bash', '-c', 'echo hi'])
+     * @param user - Usuario opcional para ejecutar el comando
+     * @returns Result con la salida estándar (stdout) y de error (stderr)
+     */
+    async execCommand(containerName, cmd, user) {
+        try {
+            const container = await this.getContainerByName(containerName);
+            if (!container) {
+                return (0, engine_types_1.failure)({ code: 'ENGINE_NOT_FOUND', message: 'Contenedor no encontrado' });
+            }
+            const exec = await container.exec({
+                Cmd: cmd,
+                AttachStdout: true,
+                AttachStderr: true,
+                User: user,
+            });
+            const stream = await exec.start({ Detach: false });
+            return new Promise((resolve) => {
+                let stdout = '';
+                let stderr = '';
+                container.modem.demuxStream(stream, {
+                    write: (chunk) => {
+                        stdout += chunk.toString('utf8');
+                    },
+                }, {
+                    write: (chunk) => {
+                        stderr += chunk.toString('utf8');
+                    },
+                });
+                stream.on('end', async () => {
+                    try {
+                        const inspect = await exec.inspect();
+                        if (inspect.ExitCode !== 0) {
+                            resolve((0, engine_types_1.failure)({ code: 'DOCKER_EXEC_FAILED', message: `Comando falló con exit code ${inspect.ExitCode}. Stderr: ${stderr}` }));
+                        }
+                        else {
+                            resolve((0, engine_types_1.success)({ stdout, stderr }));
+                        }
+                    }
+                    catch (e) {
+                        resolve((0, engine_types_1.failure)({ code: 'DOCKER_EXEC_FAILED', message: e.message, cause: e }));
+                    }
+                });
+                stream.on('error', (err) => {
+                    resolve((0, engine_types_1.failure)({ code: 'DOCKER_EXEC_FAILED', message: err.message, cause: err }));
+                });
+            });
+        }
+        catch (error) {
+            return (0, engine_types_1.failure)({
+                code: 'DOCKER_EXEC_FAILED',
+                message: `Error al ejecutar comando: ${error instanceof Error ? error.message : String(error)}`,
+                cause: error instanceof Error ? error : new Error(String(error)),
+            });
         }
     }
 }

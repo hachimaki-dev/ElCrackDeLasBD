@@ -62,7 +62,7 @@ const connectionPanel_1 = require("./connectionPanel");
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel) {
+function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager) {
     // Guardar la última conexión activa para mostrarla en el panel
     let activeConnectionInfo;
     // Escuchar cuando un motor arranca para guardar la info de conexión
@@ -117,11 +117,12 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
                 const result = await lifecycle.startEngine(engineId);
                 if (result.ok) {
                     activeConnectionInfo = result.value;
-                    // Mostrar panel de conexión automáticamente
-                    connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value);
+                    // Mostrar panel de conexión automáticamente con progreso actual
+                    connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value, undefined, progressManager.getCompletedModules(engineId));
                     void vscode.window.showInformationMessage(`✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`);
                 }
                 else {
+                    connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'error', `Error: ${result.error.message}`);
                     showEngineError(result.error.message, result.error.code);
                 }
             });
@@ -165,7 +166,22 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
             const engine = (0, registry_1.getEngineById)(currentEngineId);
             if (!engine)
                 return;
-            connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo);
+            connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
+        }),
+        // ------------------------------------------------------------------
+        // Completar Módulo de Tutorial
+        // ------------------------------------------------------------------
+        vscode.commands.registerCommand('sqlEngineLab.completeTutorial', async (moduleId) => {
+            const currentEngineId = lifecycle.getCurrentEngine();
+            if (!currentEngineId)
+                return;
+            await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
+            // Refrescar el estado del panel
+            const engine = (0, registry_1.getEngineById)(currentEngineId);
+            if (engine && activeConnectionInfo) {
+                connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
+                void vscode.window.showInformationMessage(`¡Felicidades! Completaste el módulo ${moduleId}.`);
+            }
         }),
         // ------------------------------------------------------------------
         // Copiar comando de conexión

@@ -76,6 +76,7 @@ export declare class DockerClient {
         }>>;
         exposedPorts: Record<string, Record<string, never>>;
         shmSize?: number;
+        binds?: string[];
     }): Promise<Result<Dockerode.Container>>;
     /**
      * Detiene y elimina un contenedor.
@@ -98,5 +99,17 @@ export declare class DockerClient {
      * @returns El estado ('starting', 'healthy', 'unhealthy') o null si no tiene healthcheck o no existe.
      */
     getContainerHealthStatus(containerName: string): Promise<'starting' | 'healthy' | 'unhealthy' | null>;
+    /**
+     * Ejecuta un comando dentro de un contenedor en ejecución.
+     *
+     * @param containerName - Nombre del contenedor
+     * @param cmd - Comando a ejecutar (ej. ['bash', '-c', 'echo hi'])
+     * @param user - Usuario opcional para ejecutar el comando
+     * @returns Result con la salida estándar (stdout) y de error (stderr)
+     */
+    execCommand(containerName: string, cmd: string[], user?: string): Promise<Result<{
+        stdout: string;
+        stderr: string;
+    }>>;
 }
 //# sourceMappingURL=dockerClient.d.ts.map

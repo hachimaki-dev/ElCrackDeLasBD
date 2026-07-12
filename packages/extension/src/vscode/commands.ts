@@ -38,7 +38,7 @@ export function registerCommands(
   treeProvider: EngineTreeViewProvider,
   dockerClient: DockerClient,
   outputChannel: vscode.OutputChannel,
-  progressManager: import('../core/progress/progressManager').ProgressManager
+  progressManager: import('../core/progress/progressManager').ProgressManager,
 ): vscode.Disposable[] {
   // Guardar la última conexión activa para mostrarla en el panel
   let activeConnectionInfo: ConnectionInfo | undefined;
@@ -97,12 +97,22 @@ export function registerCommands(
           },
           async (progress) => {
             progress.report({ message: 'Verificando Docker...' });
-            ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'starting', 'Verificando Docker...');
+            ConnectionPanel.createOrRevealLoading(
+              context.extensionUri,
+              engine,
+              'starting',
+              'Verificando Docker...',
+            );
 
             lifecycle.on('statusChanged', (state: EngineState) => {
               if (state.message) {
                 progress.report({ message: state.message });
-                ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, state.status, state.message);
+                ConnectionPanel.createOrRevealLoading(
+                  context.extensionUri,
+                  engine,
+                  state.status,
+                  state.message,
+                );
               }
             });
 
@@ -111,12 +121,23 @@ export function registerCommands(
             if (result.ok) {
               activeConnectionInfo = result.value;
               // Mostrar panel de conexión automáticamente con progreso actual
-              ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value, undefined, progressManager.getCompletedModules(engineId));
+              ConnectionPanel.createOrReveal(
+                context.extensionUri,
+                engine,
+                result.value,
+                undefined,
+                progressManager.getEngineProgress(engineId),
+              );
               void vscode.window.showInformationMessage(
                 `✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`,
               );
             } else {
-              ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'error', `Error: ${result.error.message}`);
+              ConnectionPanel.createOrRevealLoading(
+                context.extensionUri,
+                engine,
+                'error',
+                `Error: ${result.error.message}`,
+              );
               showEngineError(result.error.message, result.error.code);
             }
           },
@@ -179,29 +200,40 @@ export function registerCommands(
         const engine = getEngineById(currentEngineId);
         if (!engine) return;
 
-        ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
+        ConnectionPanel.createOrReveal(
+          context.extensionUri,
+          engine,
+          activeConnectionInfo,
+          undefined,
+          progressManager.getEngineProgress(currentEngineId),
+        );
       },
     ),
 
     // ------------------------------------------------------------------
     // Completar Módulo de Tutorial
     // ------------------------------------------------------------------
-    vscode.commands.registerCommand(
-      'sqlEngineLab.completeTutorial',
-      async (moduleId: string) => {
-        const currentEngineId = lifecycle.getCurrentEngine();
-        if (!currentEngineId) return;
+    vscode.commands.registerCommand('sqlEngineLab.completeTutorial', async (moduleId: string) => {
+      const currentEngineId = lifecycle.getCurrentEngine();
+      if (!currentEngineId) return;
 
-        await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
-        
-        // Refrescar el estado del panel
-        const engine = getEngineById(currentEngineId);
-        if (engine && activeConnectionInfo) {
-          ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
-          void vscode.window.showInformationMessage(`¡Felicidades! Completaste el módulo ${moduleId}.`);
-        }
+      await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
+
+      // Refrescar el estado del panel
+      const engine = getEngineById(currentEngineId);
+      if (engine && activeConnectionInfo) {
+        ConnectionPanel.createOrReveal(
+          context.extensionUri,
+          engine,
+          activeConnectionInfo,
+          undefined,
+          progressManager.getEngineProgress(currentEngineId),
+        );
+        void vscode.window.showInformationMessage(
+          `¡Felicidades! Completaste el módulo ${moduleId}.`,
+        );
       }
-    ),
+    }),
 
     // ------------------------------------------------------------------
     // Copiar comando de conexión
@@ -230,17 +262,20 @@ export function registerCommands(
     // ------------------------------------------------------------------
     vscode.commands.registerCommand('sqlEngineLab.configureCredentials', async () => {
       const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
-      
+
       const newPassword = await vscode.window.showInputBox({
         title: 'SQL Engine Lab: Configurar Contraseña Maestra',
-        prompt: 'Esta contraseña se usará tanto para el usuario estándar como para el administrador.',
+        prompt:
+          'Esta contraseña se usará tanto para el usuario estándar como para el administrador.',
         value: config.get<string>('labPassword', 'labpassword'),
         password: true,
       });
 
       if (newPassword !== undefined && newPassword.trim() !== '') {
         await config.update('labPassword', newPassword, vscode.ConfigurationTarget.Global);
-        void vscode.window.showInformationMessage('✓ Contraseña actualizada correctamente. ¡Listo para iniciar motores!');
+        void vscode.window.showInformationMessage(
+          '✓ Contraseña actualizada correctamente. ¡Listo para iniciar motores!',
+        );
       }
     }),
 

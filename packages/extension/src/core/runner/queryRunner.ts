@@ -56,7 +56,7 @@ export class QueryRunner {
             failure({
               code: 'QUERY_EXECUTION_FAILED',
               message: `Error ejecutando la query (Código ${code}):\n${errorMsg}`,
-            })
+            }),
           );
         }
       });
@@ -67,7 +67,7 @@ export class QueryRunner {
             code: 'DOCKER_EXEC_FAILED',
             message: `Error al invocar docker: ${err.message}`,
             cause: err,
-          })
+          }),
         );
       });
 
@@ -97,7 +97,15 @@ export class QueryRunner {
       case 'mariadb': {
         // mysql -h 127.0.0.1 -P <port> -u <user> -p<pass> <db>
         const engineDef = getEngineById(profile.engineId)!;
-        args.push('mysql', '-h', '127.0.0.1', '-P', engineDef.defaultPort.toString(), '-u', profile.user);
+        args.push(
+          'mysql',
+          '-h',
+          '127.0.0.1',
+          '-P',
+          engineDef.defaultPort.toString(),
+          '-u',
+          profile.user,
+        );
         if (pass) args.push(`-p${pass}`);
         if (db) args.push(db);
         break;

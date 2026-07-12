@@ -15,23 +15,18 @@ exports.getAllEngines = getAllEngines;
 exports.getEngineById = getEngineById;
 exports.getEngineCount = getEngineCount;
 exports.isValidEngineId = isValidEngineId;
-const postgres_engine_1 = require("./postgres.engine");
-const mysql_engine_1 = require("./mysql.engine");
-const mariadb_engine_1 = require("./mariadb.engine");
-const sqlite_engine_1 = require("./sqlite.engine");
-const oracle_engine_1 = require("./oracle.engine");
-const sqlserver_engine_1 = require("./sqlserver.engine");
+const engine_types_1 = require("./engine.types");
 /**
- * Catálogo completo de motores, en el orden en que se muestran en la UI.
- * El orden sigue la recomendación de PLAN.md §4: de más fácil a más difícil.
+ * Catálogo completo de motores, cargados desde la Bóveda de la Verdad (lab-contract.json).
+ * El orden de despliegue en la UI es dictado por este array.
  */
 const ALL_ENGINES = [
-    sqlite_engine_1.sqliteEngine,
-    postgres_engine_1.postgresEngine,
-    mariadb_engine_1.mariadbEngine,
-    mysql_engine_1.mysqlEngine,
-    oracle_engine_1.oracleEngine,
-    sqlserver_engine_1.sqlserverEngine,
+    engine_types_1.LAB_CONTRACT.engines.sqlite,
+    engine_types_1.LAB_CONTRACT.engines.postgres,
+    engine_types_1.LAB_CONTRACT.engines.mariadb,
+    engine_types_1.LAB_CONTRACT.engines.mysql,
+    engine_types_1.LAB_CONTRACT.engines.oracle,
+    engine_types_1.LAB_CONTRACT.engines.sqlserver,
 ];
 /** Mapa indexado por EngineId para búsquedas O(1) */
 const ENGINE_MAP = new Map(ALL_ENGINES.map((engine) => [engine.id, engine]));

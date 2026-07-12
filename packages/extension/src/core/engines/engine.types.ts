@@ -282,7 +282,9 @@ try {
     contractData = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
   } catch (e2) {
     // Ultimo intento: buscarlo a un nivel superior si por casualidad estamos en root
-    contractData = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'lab-contract.json'), 'utf8'));
+    contractData = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, 'lab-contract.json'), 'utf8'),
+    );
   }
 }
 

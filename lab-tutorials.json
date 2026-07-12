@@ -45,9 +45,9 @@
     "3-1": {
       "engine": "postgres",
       "level": "Nivel 3",
-      "title": "Triggers y Auditoría",
-      "description": "Automatiza acciones en la base de datos disparando funciones PL/pgSQL ante eventos.",
-      "content": "-- ==========================================\n-- MÓDULO 3-1: Triggers\n-- ==========================================\n\nCREATE OR REPLACE FUNCTION auditar_creditos()\nRETURNS TRIGGER AS $$\nBEGIN\n    IF NEW.creditos < OLD.creditos THEN\n        RAISE NOTICE '¡Alerta! Piloto % perdió créditos.', NEW.nombre;\n    END IF;\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\n-- RETO: Crea un TRIGGER llamado 'trg_auditar_creditos'\n-- que se ejecute BEFORE UPDATE en la tabla pilotos\n-- e invoque la función auditar_creditos()."
+      "title": "Operación: Transacciones Críticas (MVCC)",
+      "description": "Desentraña los secretos del control de concurrencia y domina el aislamiento de transacciones de grado bancario.",
+      "content": "-- ==========================================\n-- MÓDULO 3-1: MVCC y Aislamiento\n-- ==========================================\n-- En sistemas corporativos críticos, la concurrencia lo es todo.\n-- PostgreSQL usa MVCC (Multi-Version Concurrency Control).\n\nBEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n\n-- Tu misión: Transfiere fondos de manera segura entre dos bóvedas.\nUPDATE pilotos SET creditos = creditos - 500 WHERE id = 1;\nUPDATE pilotos SET creditos = creditos + 500 WHERE id = 2;\n\nCOMMIT;\n\n-- RETO: Ejecuta un ROLLBACK antes de hacer COMMIT en una nueva \n-- transacción para simular un aborto de emergencia."
     },
     "3-2": {
       "engine": "postgres",

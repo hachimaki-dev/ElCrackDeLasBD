@@ -9,7 +9,12 @@
  * a partir de la ConnectionTemplate del motor y los datos de conexión reales.
  */
 
-import { EngineDefinition, ConnectionInfo, DOCKER_IMAGE_CONFIG, EngineConfig } from '../engines/engine.types';
+import {
+  EngineDefinition,
+  ConnectionInfo,
+  DOCKER_IMAGE_CONFIG,
+  EngineConfig,
+} from '../engines/engine.types';
 
 /**
  * Datos parciales de conexión (host y port) usados para construir el comando completo.
@@ -42,8 +47,10 @@ export function buildConnectionCommand(
 
   const user = isAdmin
     ? template.adminUser || template.defaultUser
-    : 'user' in connectionInfo ? connectionInfo.user : template.defaultUser;
-  
+    : 'user' in connectionInfo
+      ? connectionInfo.user
+      : template.defaultUser;
+
   let password = '';
   if (isAdmin) {
     const isSharedPassword = template.adminPassword === DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;

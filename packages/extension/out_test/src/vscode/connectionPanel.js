@@ -41,37 +41,50 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConnectionPanel = void 0;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 class ConnectionPanel {
+    extensionUri;
     static currentPanel;
     panel;
     currentEngine;
     currentInfo;
     currentStatus;
-    loadingMessage;
-    constructor(panel, _extensionUri, engine, connectionInfo, status, loadingMessage) {
+    completedModules = [];
+    constructor(panel, extensionUri, engine, connectionInfo, status, completedModules) {
+        this.extensionUri = extensionUri;
         this.panel = panel;
         this.currentEngine = engine;
         this.currentInfo = connectionInfo;
         this.currentStatus = status;
-        this.loadingMessage = loadingMessage;
+        if (completedModules)
+            this.completedModules = completedModules;
         this.update();
         this.panel.webview.onDidReceiveMessage(async (message) => {
             if (message.command === 'copy') {
-                await vscode.env.clipboard.writeText(message.text);
-                void vscode.window.showInformationMessage('✓ Copiado al portapapeles');
+                if (message.text) {
+                    await vscode.env.clipboard.writeText(message.text);
+                    void vscode.window.showInformationMessage('✓ Copiado al portapapeles');
+                }
+            }
+            else if (message.command === 'startTutorial' && message.moduleId) {
+                await vscode.commands.executeCommand('sqlEngineLab.openTutorialSheet', message.moduleId);
+            }
+            else if (message.command === 'completeTutorial' && message.moduleId) {
+                await vscode.commands.executeCommand('sqlEngineLab.completeTutorial', message.moduleId);
             }
         });
         this.panel.onDidDispose(() => {
             ConnectionPanel.currentPanel = undefined;
         });
     }
-    static createOrReveal(extensionUri, engine, connectionInfo) {
-        ConnectionPanel.show(extensionUri, engine, connectionInfo, 'running');
+    static createOrReveal(extensionUri, engine, connectionInfo, status, completedModules) {
+        ConnectionPanel.show(extensionUri, engine, connectionInfo, status || 'running', undefined, completedModules);
     }
-    static createOrRevealLoading(extensionUri, engine, status, message) {
-        ConnectionPanel.show(extensionUri, engine, undefined, status, message);
+    static createOrRevealLoading(extensionUri, engine, status, message, completedModules) {
+        ConnectionPanel.show(extensionUri, engine, undefined, status, message, completedModules);
     }
-    static show(extensionUri, engine, connectionInfo, status, message) {
+    static show(extensionUri, engine, connectionInfo, status, _message, completedModules) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : vscode.ViewColumn.One;
@@ -80,8 +93,8 @@ class ConnectionPanel {
             ConnectionPanel.currentPanel.currentEngine = engine;
             ConnectionPanel.currentPanel.currentInfo = connectionInfo;
             ConnectionPanel.currentPanel.currentStatus = status;
-            if (message)
-                ConnectionPanel.currentPanel.loadingMessage = message;
+            if (completedModules)
+                ConnectionPanel.currentPanel.completedModules = completedModules;
             ConnectionPanel.currentPanel.update();
             return;
         }
@@ -89,7 +102,7 @@ class ConnectionPanel {
             enableScripts: true,
             retainContextWhenHidden: true,
         });
-        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo, status, message);
+        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo, status, completedModules);
     }
     static dispose() {
         if (ConnectionPanel.currentPanel) {
@@ -97,239 +110,84 @@ class ConnectionPanel {
             ConnectionPanel.currentPanel = undefined;
         }
     }
+    loadTutorials() {
+        let tutorialsData = null;
+        // 1. Intentar en el workspace (útil para desarrollo)
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const wsPath = path.join(workspaceFolders[0].uri.fsPath, 'lab-tutorials.json');
+            if (fs.existsSync(wsPath)) {
+                try {
+                    tutorialsData = JSON.parse(fs.readFileSync(wsPath, 'utf8'));
+                }
+                catch (e) {
+                    console.error("Error reading workspace lab-tutorials", e);
+                }
+            }
+        }
+        // 2. Intentar usando this.extensionUri
+        if (!tutorialsData) {
+            try {
+                let tutorialsPath = path.join(this.extensionUri.fsPath, '..', '..', 'lab-tutorials.json');
+                if (!fs.existsSync(tutorialsPath)) {
+                    tutorialsPath = path.join(this.extensionUri.fsPath, 'lab-tutorials.json');
+                }
+                if (fs.existsSync(tutorialsPath)) {
+                    tutorialsData = JSON.parse(fs.readFileSync(tutorialsPath, 'utf8'));
+                }
+            }
+            catch (err) {
+                console.error("Error reading extension path lab-tutorials", err);
+            }
+        }
+        return tutorialsData;
+    }
     update() {
         this.panel.title = `SQL Lab — ${this.currentEngine.displayName}`;
         this.panel.webview.html = this.buildHtml();
+        // Leer los tutoriales del motor activo
+        const tutorialsData = this.loadTutorials();
+        const engineTutorials = tutorialsData ? tutorialsData[this.currentEngine.id] : undefined;
+        // Enviar estado al frontend React
+        this.panel.webview.postMessage({
+            command: 'updateState',
+            engine: {
+                id: this.currentEngine.id,
+                displayName: this.currentEngine.displayName,
+                status: this.currentStatus,
+                connectionCommand: this.currentInfo?.connectionCommand,
+                port: this.currentInfo?.port,
+                completedModules: this.completedModules
+            },
+            tutorials: engineTutorials
+        });
     }
     buildHtml() {
-        const engine = this.currentEngine;
-        const info = this.currentInfo;
-        const isReady = this.currentStatus === 'running' && !!info;
-        const isSqlite = engine.id === 'sqlite';
-        // ------------------------------------------------------------------------
-        // PANTALLA DE CARGA
-        // ------------------------------------------------------------------------
-        if (!isReady) {
-            const speedNote = engine.startupSpeed === 'slow'
-                ? `<div class="hint" style="margin-top: 16px;">⏱️ <b>Nota:</b> Este motor es pesado. Su primera inicialización puede tardar 1-2 minutos. Por favor, ten paciencia.</div>`
-                : '';
-            return /* html */ `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cargando ${this.escape(engine.displayName)}...</title>
-  <style>
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--vscode-editor-background); }
-    .loader { border: 4px solid var(--vscode-editor-inactiveSelectionBackground); border-top: 4px solid var(--vscode-button-background); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 24px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    h2 { font-weight: 500; margin-bottom: 8px; }
-    .status-msg { color: var(--vscode-descriptionForeground); font-size: 14px; }
-    .hint { color: var(--vscode-textPreformat-foreground); background: var(--vscode-textBlockQuote-background); padding: 12px; border-left: 4px solid var(--vscode-button-background); border-radius: 4px; max-width: 400px; text-align: center; }
-  </style>
-</head>
-<body>
-  <div class="loader"></div>
-  <h2>Iniciando ${this.escape(engine.displayName)}...</h2>
-  <div class="status-msg">${this.escape(this.loadingMessage || 'Preparando contenedor...')}</div>
-  ${speedNote}
-</body>
-</html>`;
-        }
-        // ------------------------------------------------------------------------
-        // PANTALLA PRINCIPAL (READY)
-        // ------------------------------------------------------------------------
-        // TAB: ESTÁNDAR
-        const standardTabContent = isSqlite ? '' : `
-      <div class="data-grid">
-        <div class="data-label">Host</div><div class="data-value"><code>${this.escape(info.host)}</code></div>
-        <div class="data-label">Puerto</div><div class="data-value"><code>${info.port}</code></div>
-        <div class="data-label">Usuario</div><div class="data-value"><code>${this.escape(info.user)}</code></div>
-        <div class="data-label">Password</div><div class="data-value"><code>${this.escape(info.password)}</code></div>
-        <div class="data-label">Base de datos</div><div class="data-value"><code>${this.escape(info.database)}</code></div>
-      </div>
-      <div class="section-title" style="margin-top: 20px;">Comando de Terminal (Recomendado)</div>
-      <div class="command-block" id="cmdStandard">${this.escape(info.connectionCommand)}</div>
-      <button class="copy-btn" id="btnCopyStd" onclick="copyText('cmdStandard', 'btnCopyStd')">
-        <span>📋 Copiar comando</span>
-      </button>
-    `;
-        // TAB: ADMIN
-        let adminTabContent = '';
-        if (!isSqlite && info.adminConnectionCommand) {
-            const adminPassMsg = engine.connectionTemplate.adminPasswordRequiresInput
-                ? `<div class="warning-badge">⚠️ ${this.escape(engine.connectionTemplate.adminPasswordMessage || 'Requiere contraseña especial o sin contraseña')}</div>`
-                : `<div class="info-badge">ℹ️ ${this.escape(engine.connectionTemplate.adminPasswordMessage || 'Misma contraseña que el laboratorio')}</div>`;
-            adminTabContent = `
-        ${adminPassMsg}
-        <div class="data-grid" style="margin-top: 16px;">
-          <div class="data-label">Usuario Admin</div><div class="data-value"><code>${this.escape(engine.connectionTemplate.adminUser || '')}</code></div>
-        </div>
-        <div class="section-title" style="margin-top: 20px;">Comando de Terminal (Admin)</div>
-        <div class="command-block" id="cmdAdmin">${this.escape(info.adminConnectionCommand)}</div>
-        <button class="copy-btn" id="btnCopyAdmin" onclick="copyText('cmdAdmin', 'btnCopyAdmin')">
-          <span>📋 Copiar comando Admin</span>
-        </button>
-      `;
-        }
-        // SECCIÓN: COMANDOS DE PRUEBA
-        let testCommandsHtml = '';
-        if (engine.connectionTemplate.testCommands && engine.connectionTemplate.testCommands.length > 0) {
-            testCommandsHtml = `
-        <div class="card" style="margin-top: 24px;">
-          <div class="card-header">
-            <h3 class="card-title">Comandos de Prueba</h3>
-          </div>
-          <div class="card-body">
-            <div class="hint" style="margin-bottom: 12px;">Pega estos comandos en tu terminal una vez conectado para validar que todo funciona.</div>
-            <div class="command-block" id="cmdTest">${engine.connectionTemplate.testCommands.map(cmd => this.escape(cmd)).join('<br/>')}</div>
-            <button class="copy-btn secondary" id="btnCopyTest" onclick="copyTextHtml('cmdTest', 'btnCopyTest')">
-              <span>📋 Copiar todos</span>
-            </button>
-          </div>
-        </div>
-      `;
-        }
+        const webview = this.panel.webview;
+        // Rutas a los assets compilados de Vite
+        const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview-ui', 'assets', 'index.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview-ui', 'assets', 'index.js'));
+        // Pantalla de carga tradicional (para fallback o antes de cargar React completo si se desea, 
+        // pero Vite es rápido. Vamos a cargar React siempre para mantener la estética).
         return /* html */ `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SQL Engine Lab — ${this.escape(engine.displayName)}</title>
-  <style>
-    :root { --radius: 8px; --gap: 16px; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 32px 24px; max-width: 800px; margin: 0 auto; }
-    
-    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 24px; }
-    .status-dot { width: 14px; height: 14px; border-radius: 50%; background: #3fb950; box-shadow: 0 0 10px #3fb95080; flex-shrink: 0; }
-    h1 { font-size: 22px; font-weight: 600; color: var(--vscode-foreground); margin-bottom: 4px; }
-    .subtitle { font-size: 13px; color: var(--vscode-descriptionForeground); }
-
-    .card { background: var(--vscode-editor-inactiveSelectionBackground); border: 1px solid var(--vscode-panel-border); border-radius: var(--radius); overflow: hidden; }
-    
-    /* Tabs */
-    .tabs { display: flex; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
-    .tab { padding: 12px 24px; cursor: pointer; font-weight: 500; font-size: 13px; color: var(--vscode-descriptionForeground); border-bottom: 2px solid transparent; transition: all 0.2s; }
-    .tab:hover { color: var(--vscode-foreground); background: var(--vscode-list-hoverBackground); }
-    .tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-button-background); }
-    
-    .tab-content { display: none; padding: 24px; }
-    .tab-content.active { display: block; }
-    
-    .card-header { padding: 16px 24px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
-    .card-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vscode-foreground); }
-    .card-body { padding: 24px; }
-
-    .data-grid { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: center; }
-    .data-label { color: var(--vscode-descriptionForeground); font-size: 13px; font-weight: 500; }
-    .data-value code { font-family: var(--vscode-editor-font-family); font-size: 13px; background: var(--vscode-textCodeBlock-background); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--vscode-panel-border); }
-
-    .section-title { font-size: 12px; font-weight: 600; color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
-    .command-block { background: var(--vscode-textCodeBlock-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 16px; margin-bottom: 16px; font-family: var(--vscode-editor-font-family); font-size: 13px; word-break: break-all; line-height: 1.5; color: var(--vscode-foreground); }
-    
-    .copy-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
-    .copy-btn:hover { background: var(--vscode-button-hoverBackground); }
-    .copy-btn:active { transform: scale(0.97); }
-    .copy-btn.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-    .copy-btn.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    .copy-btn.copied { background: #3fb950 !important; color: #fff !important; }
-
-    .hint { font-size: 13px; color: var(--vscode-descriptionForeground); line-height: 1.5; }
-    .info-badge { display: inline-block; padding: 6px 12px; background: var(--vscode-textBlockQuote-background); color: var(--vscode-textBlockQuote-border); border-radius: 4px; font-size: 12px; font-weight: 500; border-left: 3px solid var(--vscode-textBlockQuote-border); }
-    .warning-badge { display: inline-block; padding: 6px 12px; background: var(--vscode-inputValidation-warningBackground); color: var(--vscode-inputValidation-warningForeground); border-radius: 4px; font-size: 12px; font-weight: 500; border-left: 3px solid var(--vscode-inputValidation-warningBorder); }
-    
-    /* Para SQLite (single view) */
-    .single-view { padding: 24px; }
-  </style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:;">
+  <title>SQL Engine Lab</title>
+  <link rel="stylesheet" href="${stylesUri}">
+  <script>
+    // Initialize VS Code API global before React loads
+    const vscode = acquireVsCodeApi();
+    window.acquireVsCodeApi = () => vscode;
+  </script>
 </head>
 <body>
-  <div class="header">
-    <div class="status-dot"></div>
-    <div>
-      <h1>${this.escape(engine.displayName)}</h1>
-      <div class="subtitle">Estado: <b>Corriendo</b> • Puerto: ${info.port}</div>
-    </div>
-  </div>
-
-  ${isSqlite ? `
-    <div class="card">
-      <div class="card-header"><h3 class="card-title">Conexión a SQLite</h3></div>
-      <div class="single-view">
-        <div class="hint" style="margin-bottom: 16px;">SQLite usa un archivo local embebido, no requiere credenciales.</div>
-        <div class="section-title">Comando de Terminal</div>
-        <div class="command-block" id="cmdSqlite">${this.escape(info.connectionCommand)}</div>
-        <button class="copy-btn" id="btnCopySqlite" onclick="copyText('cmdSqlite', 'btnCopySqlite')">
-          <span>📋 Copiar comando</span>
-        </button>
-      </div>
-    </div>
-  ` : `
-    <div class="card">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab(event, 'tab-standard')">👤 Conexión Estándar</div>
-        ${adminTabContent ? `<div class="tab" onclick="switchTab(event, 'tab-admin')">🛡️ Conexión Administrador</div>` : ''}
-      </div>
-      <div id="tab-standard" class="tab-content active">
-        ${standardTabContent}
-      </div>
-      ${adminTabContent ? `
-      <div id="tab-admin" class="tab-content">
-        ${adminTabContent}
-      </div>
-      ` : ''}
-    </div>
-  `}
-
-  ${testCommandsHtml}
-
-  <script>
-    const vscode = acquireVsCodeApi();
-
-    function switchTab(evt, tabId) {
-      const tabs = document.getElementsByClassName('tab');
-      for (let i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
-      const contents = document.getElementsByClassName('tab-content');
-      for (let i = 0; i < contents.length; i++) { contents[i].classList.remove('active'); }
-      evt.currentTarget.classList.add('active');
-      document.getElementById(tabId).classList.add('active');
-    }
-
-    function copyText(elementId, btnId) {
-      const text = document.getElementById(elementId).textContent;
-      doCopy(text, btnId);
-    }
-    
-    function copyTextHtml(elementId, btnId) {
-      // Reemplaza los <br> con saltos de linea reales para copiar multi-linea
-      const html = document.getElementById(elementId).innerHTML;
-      const text = html.replace(/<br\\s*\\/?>/gi, '\\n');
-      doCopy(text, btnId);
-    }
-
-    function doCopy(text, btnId) {
-      if (text) {
-        vscode.postMessage({ command: 'copy', text: text });
-        const btn = document.getElementById(btnId);
-        const originalHtml = btn.innerHTML;
-        btn.classList.add('copied');
-        btn.innerHTML = '<span>✓ Copiado</span>';
-        setTimeout(() => {
-          btn.classList.remove('copied');
-          btn.innerHTML = originalHtml;
-        }, 2000);
-      }
-    }
-  </script>
+  <div id="root"></div>
+  <script type="module" src="${scriptUri}"></script>
 </body>
 </html>`;
-    }
-    escape(text) {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
     }
 }
 exports.ConnectionPanel = ConnectionPanel;

@@ -55,6 +55,11 @@ const treeView_1 = require("./vscode/treeView");
 const commands_1 = require("./vscode/commands");
 const configProvider_1 = require("./vscode/configProvider");
 const platformInfo_1 = require("./core/docker/platformInfo");
+const vault_1 = require("./core/credentials/vault");
+const queryRunner_1 = require("./core/runner/queryRunner");
+const sheetManager_1 = require("./vscode/sheet/sheetManager");
+const sheetCommands_1 = require("./vscode/sheet/sheetCommands");
+const progressManager_1 = require("./core/progress/progressManager");
 /**
  * Activación de la extensión.
  * VS Code llama a esta función cuando se activa la extensión
@@ -74,6 +79,11 @@ function activate(context) {
     const dockerClient = new dockerClient_1.DockerClient();
     const configProvider = new configProvider_1.VsCodeConfigurationProvider();
     const lifecycle = new containerLifecycle_1.ContainerLifecycle(dockerClient, configProvider);
+    // ---- Instancias de Hojas SQL ----
+    const vault = new vault_1.CredentialVault(context.secrets, context.globalState);
+    const sheetManager = new sheetManager_1.SheetManager();
+    const queryRunner = new queryRunner_1.QueryRunner();
+    const progressManager = new progressManager_1.ProgressManager(context.globalState);
     // ---- Conectar eventos de diagnóstico al OutputChannel ----
     lifecycle.on('diagnosticLog', (message) => {
         outputChannel.appendLine(message);
@@ -89,10 +99,11 @@ function activate(context) {
         showCollapseAll: false,
     });
     // ---- Registrar comandos ----
-    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel);
+    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager);
+    const sheetDisposables = (0, sheetCommands_1.registerSheetCommands)(context, sheetManager, vault, queryRunner, lifecycle);
     // ---- Agregar todos los disposables al contexto ----
     // VS Code los limpiará automáticamente al desactivar la extensión
-    context.subscriptions.push(treeView, treeProvider, outputChannel, ...commandDisposables, 
+    context.subscriptions.push(treeView, treeProvider, outputChannel, ...commandDisposables, ...sheetDisposables, 
     // Disposable para lifecycle (detener contenedor activo al desactivar)
     new vscode.Disposable(() => {
         void lifecycle.stopEngine();

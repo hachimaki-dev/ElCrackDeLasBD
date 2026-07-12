@@ -22,7 +22,7 @@ const PROFILES_KEY = 'sqlEngineLab.profiles';
 export class CredentialVault {
   constructor(
     private secretStorage: vscode.SecretStorage,
-    private globalState: vscode.Memento
+    private globalState: vscode.Memento,
   ) {}
 
   /**

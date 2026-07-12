@@ -10,8 +10,41 @@
  * - EngineDefinition como interfaz Adapter que cada motor implementa (Open/Closed Principle)
  * - Tipos estrictos para IDs de motor (EngineId) en vez de strings genéricos
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DOCKER_IMAGE_CONFIG = void 0;
+exports.DOCKER_IMAGE_CONFIG = exports.LAB_CONTRACT = void 0;
 exports.success = success;
 exports.failure = failure;
 /**
@@ -29,21 +62,38 @@ function failure(error) {
 // ==========================================================================
 // Docker Config
 // ==========================================================================
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+/**
+ * Contrato maestro (Bóveda de la Verdad).
+ * Resolvemos la ruta considerando que el archivo compilado estará en out/core/engines/engine.types.js
+ * out -> extension -> packages -> root (4 niveles desde out, 5 niveles desde out/core/engines)
+ */
+const contractPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+let contractData;
+try {
+    contractData = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+}
+catch (e) {
+    // Fallback si corre desde un entorno donde __dirname es diferente (ej. webpack, ts-node)
+    // Intentamos buscarlo asumiendo que estamos en packages/extension/src/core/engines
+    const fallbackPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+    try {
+        contractData = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
+    }
+    catch (e2) {
+        // Ultimo intento: buscarlo a un nivel superior si por casualidad estamos en root
+        contractData = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'lab-contract.json'), 'utf8'));
+    }
+}
+exports.LAB_CONTRACT = contractData;
 /**
  * Configuración de la imagen Docker del laboratorio.
  */
 exports.DOCKER_IMAGE_CONFIG = {
-    /** Nombre de la imagen en Docker Hub */
-    imageName: 'sql-engine-lab',
-    /** Tag de la imagen */
-    imageTag: 'dev',
-    /** Nombre del contenedor que crea la extensión */
-    containerName: 'sql-engine-lab',
-    /** Variables de entorno por defecto */
-    defaultEnv: {
-        LAB_USER: 'labuser',
-        LAB_PASSWORD: 'labpassword',
-        LAB_DATABASE: 'labdb',
-    },
+    imageName: contractData.docker.imageName,
+    imageTag: contractData.docker.imageTag,
+    containerName: contractData.docker.containerName,
+    defaultEnv: contractData.defaultEnv,
 };
 //# sourceMappingURL=engine.types.js.map

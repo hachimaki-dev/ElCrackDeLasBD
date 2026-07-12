@@ -15,7 +15,13 @@
  */
 
 import { DockerClient } from './dockerClient';
-import { PlatformInfo, detectPlatform, getEmulationWarning, getArm64NativeNote, requiresEmulation } from './platformInfo';
+import {
+  PlatformInfo,
+  detectPlatform,
+  getEmulationWarning,
+  getArm64NativeNote,
+  requiresEmulation,
+} from './platformInfo';
 import { resolveDockerOptions, ResolverEnv } from './dockerConfigResolver';
 import { DOCKER_IMAGE_CONFIG, EngineId } from '../engines/engine.types';
 import { getAllEngines } from '../engines/registry';
@@ -143,11 +149,12 @@ export async function runDoctor(
       name: 'Socket Docker',
       status: 'fail',
       message: 'No se encontró ningún socket Docker ni conexión TCP.',
-      action: platform.os === 'darwin'
-        ? 'Instala y abre Docker Desktop para macOS desde https://docker.com/products/docker-desktop'
-        : platform.os === 'win32'
-          ? 'Instala y abre Docker Desktop para Windows desde https://docker.com/products/docker-desktop'
-          : 'Instala Docker Engine: sudo apt-get install docker.io (Ubuntu/Debian) o equivalente',
+      action:
+        platform.os === 'darwin'
+          ? 'Instala y abre Docker Desktop para macOS desde https://docker.com/products/docker-desktop'
+          : platform.os === 'win32'
+            ? 'Instala y abre Docker Desktop para Windows desde https://docker.com/products/docker-desktop'
+            : 'Instala Docker Engine: sudo apt-get install docker.io (Ubuntu/Debian) o equivalente',
     });
   }
 
@@ -164,11 +171,12 @@ export async function runDoctor(
       name: 'Docker daemon',
       status: 'fail',
       message: availabilityResult.error.message,
-      action: platform.os === 'darwin'
-        ? 'Abre Docker Desktop desde el Dock o Applications.'
-        : platform.os === 'win32'
-          ? 'Abre Docker Desktop desde el menú Inicio.'
-          : 'Inicia el servicio Docker: sudo systemctl start docker',
+      action:
+        platform.os === 'darwin'
+          ? 'Abre Docker Desktop desde el Dock o Applications.'
+          : platform.os === 'win32'
+            ? 'Abre Docker Desktop desde el menú Inicio.'
+            : 'Inicia el servicio Docker: sudo systemctl start docker',
     });
   }
 
@@ -197,8 +205,8 @@ export async function runDoctor(
   // ── Check 5: Motores bajo emulación ──
   if (platform.isArm) {
     const emulatedEngines = getAllEngines()
-      .filter(eng => requiresEmulation(eng.id, platform))
-      .map(eng => eng.displayName);
+      .filter((eng) => requiresEmulation(eng.id, platform))
+      .map((eng) => eng.displayName);
 
     if (emulatedEngines.length > 0) {
       checks.push({
@@ -210,8 +218,8 @@ export async function runDoctor(
     }
 
     const nativeEngines = getAllEngines()
-      .filter(eng => !requiresEmulation(eng.id, platform))
-      .map(eng => eng.displayName);
+      .filter((eng) => !requiresEmulation(eng.id, platform))
+      .map((eng) => eng.displayName);
 
     if (nativeEngines.length > 0) {
       checks.push({
@@ -229,7 +237,7 @@ export async function runDoctor(
   }
 
   // ── Compatibilidad por motor ──
-  const engineCompatibility: EngineCompatibility[] = getAllEngines().map(engine => {
+  const engineCompatibility: EngineCompatibility[] = getAllEngines().map((engine) => {
     const emulated = requiresEmulation(engine.id, platform);
     const emulationWarning = getEmulationWarning(engine.id, platform);
     const nativeNote = getArm64NativeNote(engine.id, platform);
@@ -243,9 +251,9 @@ export async function runDoctor(
   });
 
   // ── Resumen ──
-  const passed = checks.filter(c => c.status === 'pass').length;
-  const failed = checks.filter(c => c.status === 'fail').length;
-  const warnings = checks.filter(c => c.status === 'warn').length;
+  const passed = checks.filter((c) => c.status === 'pass').length;
+  const failed = checks.filter((c) => c.status === 'fail').length;
+  const warnings = checks.filter((c) => c.status === 'warn').length;
 
   return {
     timestamp: new Date().toISOString(),
@@ -324,7 +332,9 @@ export function formatDoctorReport(report: DoctorReport): string {
 
   lines.push('');
   lines.push('── Summary ─────────────────────────────────────────────');
-  lines.push(`  Total: ${report.summary.total} | ✅ ${report.summary.passed} | ❌ ${report.summary.failed} | ⚠️  ${report.summary.warnings}`);
+  lines.push(
+    `  Total: ${report.summary.total} | ✅ ${report.summary.passed} | ❌ ${report.summary.failed} | ⚠️  ${report.summary.warnings}`,
+  );
 
   if (report.summary.allCriticalPassed) {
     lines.push('  🎉 Todo listo — puedes iniciar cualquier motor.');
@@ -343,9 +353,7 @@ export function formatDoctorReport(report: DoctorReport): string {
  * @param dockerClient - Cliente Docker
  * @returns String formateado del reporte
  */
-export async function runDoctorFormatted(
-  dockerClient: DockerClient,
-): Promise<string> {
+export async function runDoctorFormatted(dockerClient: DockerClient): Promise<string> {
   const report = await runDoctor(dockerClient);
   return formatDoctorReport(report);
 }

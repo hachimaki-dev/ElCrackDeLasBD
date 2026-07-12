@@ -87,7 +87,9 @@ class ContainerLifecycle extends events_1.EventEmitter {
             }
         }
         // Pull de la imagen si no existe localmente
-        const fullImageName = `${engine_types_1.DOCKER_IMAGE_CONFIG.imageName}:${engine_types_1.DOCKER_IMAGE_CONFIG.imageTag}`;
+        const fullImageName = engineId === 'oracle'
+            ? 'gvenzl/oracle-free:23.5-slim'
+            : `${engine_types_1.DOCKER_IMAGE_CONFIG.imageName}:${engine_types_1.DOCKER_IMAGE_CONFIG.imageTag}`;
         const imageExists = await this.dockerClient.imageExists(fullImageName);
         if (!imageExists) {
             this.updateStatus(engineId, 'pulling', 'Descargando imagen Docker...');
@@ -113,21 +115,28 @@ class ContainerLifecycle extends events_1.EventEmitter {
         const envUser = config?.labUser || engine.connectionTemplate.defaultUser || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
         const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
         const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
+        // Nota: La validación estricta de complejidad fue eliminada porque
+        // gvenzl/oracle-free acepta contraseñas simples en entornos de desarrollo local.
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             allocatedPort = engine.defaultPort === 0 ? 0 : engine.defaultPort + attempt;
             const portBindings = this.buildPortBindings(engine, allocatedPort);
             const exposedPorts = this.buildExposedPorts(engine);
-            startResult = await this.dockerClient.createAndStartContainer({
-                name: engine_types_1.DOCKER_IMAGE_CONFIG.containerName,
-                image: fullImageName,
-                env: {
+            const envVars = engine.id === 'oracle'
+                ? { ORACLE_PASSWORD: envPassword }
+                : {
                     ENGINE: engine.dockerEnvValue,
                     LAB_USER: envUser,
                     LAB_PASSWORD: envPassword,
                     LAB_DATABASE: envDatabase,
-                },
+                };
+            startResult = await this.dockerClient.createAndStartContainer({
+                name: engine_types_1.DOCKER_IMAGE_CONFIG.containerName,
+                image: fullImageName,
+                env: envVars,
                 portBindings,
                 exposedPorts,
+                shmSize: engine.dockerShmSize,
+                binds: engine.id === 'oracle' ? ['oracle-volume:/opt/oracle/oradata'] : [],
             });
             if (startResult.ok) {
                 break; // Éxito
@@ -153,6 +162,34 @@ class ContainerLifecycle extends events_1.EventEmitter {
             // Limpiar el contenedor fallido
             await this.dockerClient.stopAndRemoveContainer(engine_types_1.DOCKER_IMAGE_CONFIG.containerName);
             return (0, engine_types_1.failure)(healthcheckResult.error);
+        }
+        // Configurar credenciales en tiempo de ejecución para Oracle
+        if (engine.id === 'oracle') {
+            this.updateStatus(engineId, 'starting', 'Configurando credenciales de Oracle...');
+            const resetResult = await this.dockerClient.execCommand(engine_types_1.DOCKER_IMAGE_CONFIG.containerName, ['resetPassword', envPassword], 'oracle');
+            if (!resetResult.ok) {
+                this.emitLog(`Failed to reset SYS password: ${resetResult.error.message}`);
+            }
+            const setupScript = `WHENEVER SQLERROR CONTINUE;
+ALTER SESSION SET CONTAINER=FREEPDB1;
+BEGIN
+  EXECUTE IMMEDIATE 'DROP USER ${envUser} CASCADE';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -1918 THEN
+      RAISE;
+    END IF;
+END;
+/
+WHENEVER SQLERROR EXIT FAILURE;
+CREATE USER ${envUser} IDENTIFIED BY "${envPassword}";
+GRANT CONNECT, RESOURCE, DBA TO ${envUser};
+EXIT;
+`;
+            const setupResult = await this.dockerClient.execCommand(engine_types_1.DOCKER_IMAGE_CONFIG.containerName, ['bash', '-c', `sqlplus -s / as sysdba << "EOF"\n${setupScript}\nEOF\n`], 'oracle');
+            if (!setupResult.ok) {
+                this.emitLog(`Failed to configure sandbox user: ${setupResult.error.message}`);
+            }
         }
         // Motor listo — generar info de conexión
         this.currentEngineId = engineId;
@@ -234,13 +271,22 @@ class ContainerLifecycle extends events_1.EventEmitter {
                 });
             }
             // Si no tiene healthcheck o no se pudo leer (ej. SQLite o iniciando),
-            // usamos un timeout mínimo de seguridad.
+            // usamos un timeout mínimo de seguridad o un check manual.
             if (healthStatus === null) {
-                const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
-                if (Date.now() - startTime >= minimumWaitMs) {
-                    const stillRunning = await this.dockerClient.isContainerRunning(engine_types_1.DOCKER_IMAGE_CONFIG.containerName);
-                    if (stillRunning) {
+                if (engine.id === 'oracle') {
+                    // Oracle 23ai Free nativo no tiene Docker Healthcheck, usamos su script interno
+                    const hcResult = await this.dockerClient.execCommand(engine_types_1.DOCKER_IMAGE_CONFIG.containerName, ['/opt/oracle/healthcheck.sh'], 'oracle');
+                    if (hcResult.ok) {
                         return (0, engine_types_1.success)(undefined);
+                    }
+                }
+                else {
+                    const minimumWaitMs = engine.id === 'sqlite' ? 1000 : 5000;
+                    if (Date.now() - startTime >= minimumWaitMs) {
+                        const stillRunning = await this.dockerClient.isContainerRunning(engine_types_1.DOCKER_IMAGE_CONFIG.containerName);
+                        if (stillRunning) {
+                            return (0, engine_types_1.success)(undefined);
+                        }
                     }
                 }
             }

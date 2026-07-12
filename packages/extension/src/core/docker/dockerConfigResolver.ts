@@ -65,8 +65,13 @@ const defaultEnv: ResolverEnv = {
  */
 export function resolveDockerOptions(overrides?: Partial<ResolverEnv>): Dockerode.DockerOptions {
   const resolvedEnv: ResolverEnv = { ...defaultEnv, ...overrides };
-  const { env, platform, homedir, fsExistsSync, fsReadFileSync, fsReaddirSync, onLog } = resolvedEnv;
-  const log = onLog ?? (() => { /* no-op */ });
+  const { env, platform, homedir, fsExistsSync, fsReadFileSync, fsReaddirSync, onLog } =
+    resolvedEnv;
+  const log =
+    onLog ??
+    (() => {
+      /* no-op */
+    });
 
   log(`Resolving Docker options for platform: ${platform}`);
 

@@ -59,9 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   lifecycle.on('emulationWarning', (data: { engineId: string; message: string }) => {
     outputChannel.appendLine(`⚠️ [EMULACIÓN] ${data.message}`);
-    void vscode.window.showWarningMessage(
-      `SQL Engine Lab: ${data.message}`,
-    );
+    void vscode.window.showWarningMessage(`SQL Engine Lab: ${data.message}`);
   });
 
   // ---- Registrar Tree View ----
@@ -78,7 +76,7 @@ export function activate(context: vscode.ExtensionContext): void {
     treeProvider,
     dockerClient,
     outputChannel,
-    progressManager
+    progressManager,
   );
 
   const sheetDisposables = registerSheetCommands(
@@ -86,7 +84,7 @@ export function activate(context: vscode.ExtensionContext): void {
     sheetManager,
     vault,
     queryRunner,
-    lifecycle
+    lifecycle,
   );
 
   // ---- Agregar todos los disposables al contexto ----

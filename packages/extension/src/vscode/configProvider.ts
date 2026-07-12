@@ -12,7 +12,7 @@ import { ConfigurationProvider, EngineConfig } from '../core/engines/engine.type
 export class VsCodeConfigurationProvider implements ConfigurationProvider {
   getConfig(): EngineConfig {
     const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
-    
+
     return {
       labUser: config.get<string>('labUser', 'labuser'),
       labPassword: config.get<string>('labPassword', 'labpassword'),

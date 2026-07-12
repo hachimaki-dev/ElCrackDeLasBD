@@ -26,5 +26,5 @@ import { EngineTreeViewProvider } from './treeView';
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider, dockerClient: DockerClient, outputChannel: vscode.OutputChannel): vscode.Disposable[];
+export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider, dockerClient: DockerClient, outputChannel: vscode.OutputChannel, progressManager: import('../core/progress/progressManager').ProgressManager): vscode.Disposable[];
 //# sourceMappingURL=commands.d.ts.map

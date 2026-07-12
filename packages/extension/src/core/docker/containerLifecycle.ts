@@ -105,9 +105,10 @@ export class ContainerLifecycle extends EventEmitter {
     }
 
     // Pull de la imagen si no existe localmente
-    const fullImageName = engineId === 'oracle' 
-      ? 'gvenzl/oracle-free:23.5-slim' 
-      : `${DOCKER_IMAGE_CONFIG.imageName}:${DOCKER_IMAGE_CONFIG.imageTag}`;
+    const fullImageName =
+      engineId === 'oracle'
+        ? 'gvenzl/oracle-free:23.5-slim'
+        : `${DOCKER_IMAGE_CONFIG.imageName}:${DOCKER_IMAGE_CONFIG.imageTag}`;
     const imageExists = await this.dockerClient.imageExists(fullImageName);
 
     if (!imageExists) {
@@ -132,12 +133,21 @@ export class ContainerLifecycle extends EventEmitter {
     let allocatedPort = engine.defaultPort;
     const maxRetries = 10;
     let startResult;
-    
+
     // Obtener credenciales del usuario
     const config = this.configProvider ? this.configProvider.getConfig() : undefined;
-    const envUser = config?.labUser || engine.connectionTemplate.defaultUser || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
-    const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
-    const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
+    const envUser =
+      config?.labUser ||
+      engine.connectionTemplate.defaultUser ||
+      DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
+    const envPassword =
+      config?.labPassword ||
+      engine.connectionTemplate.defaultPassword ||
+      DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
+    const envDatabase =
+      config?.labDatabase ||
+      engine.connectionTemplate.defaultDatabase ||
+      DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
 
     // Nota: La validación estricta de complejidad fue eliminada porque
     // gvenzl/oracle-free acepta contraseñas simples en entornos de desarrollo local.
@@ -147,14 +157,15 @@ export class ContainerLifecycle extends EventEmitter {
       const portBindings = this.buildPortBindings(engine, allocatedPort);
       const exposedPorts = this.buildExposedPorts(engine);
 
-      const envVars: Record<string, string> = engine.id === 'oracle'
-        ? { ORACLE_PASSWORD: envPassword }
-        : {
-            ENGINE: engine.dockerEnvValue,
-            LAB_USER: envUser,
-            LAB_PASSWORD: envPassword,
-            LAB_DATABASE: envDatabase,
-          };
+      const envVars: Record<string, string> =
+        engine.id === 'oracle'
+          ? { ORACLE_PASSWORD: envPassword }
+          : {
+              ENGINE: engine.dockerEnvValue,
+              LAB_USER: envUser,
+              LAB_PASSWORD: envPassword,
+              LAB_DATABASE: envDatabase,
+            };
 
       startResult = await this.dockerClient.createAndStartContainer({
         name: DOCKER_IMAGE_CONFIG.containerName,
@@ -170,8 +181,16 @@ export class ContainerLifecycle extends EventEmitter {
         break; // Éxito
       }
 
-      if (startResult.error.code === 'PORT_IN_USE' && engine.defaultPort !== 0 && attempt < maxRetries) {
-        this.updateStatus(engineId, 'starting', `Puerto ${allocatedPort} ocupado. Probando ${allocatedPort + 1}...`);
+      if (
+        startResult.error.code === 'PORT_IN_USE' &&
+        engine.defaultPort !== 0 &&
+        attempt < maxRetries
+      ) {
+        this.updateStatus(
+          engineId,
+          'starting',
+          `Puerto ${allocatedPort} ocupado. Probando ${allocatedPort + 1}...`,
+        );
       } else {
         break; // Otro error, o no hay más reintentos, o es SQLite
       }
@@ -201,7 +220,7 @@ export class ContainerLifecycle extends EventEmitter {
       const resetResult = await this.dockerClient.execCommand(
         DOCKER_IMAGE_CONFIG.containerName,
         ['resetPassword', envPassword],
-        'oracle'
+        'oracle',
       );
       if (!resetResult.ok) {
         this.emitLog(`Failed to reset SYS password: ${resetResult.error.message}`);
@@ -226,7 +245,7 @@ EXIT;
       const setupResult = await this.dockerClient.execCommand(
         DOCKER_IMAGE_CONFIG.containerName,
         ['bash', '-c', `sqlplus -s / as sysdba << "EOF"\n${setupScript}\nEOF\n`],
-        'oracle'
+        'oracle',
       );
       if (!setupResult.ok) {
         this.emitLog(`Failed to configure sandbox user: ${setupResult.error.message}`);
@@ -237,10 +256,14 @@ EXIT;
     this.currentEngineId = engineId;
     this.currentStatus = 'running';
 
-    const connectionDetails = buildConnectionDetails(engine, {
-      host: 'localhost',
-      port: allocatedPort,
-    }, config);
+    const connectionDetails = buildConnectionDetails(
+      engine,
+      {
+        host: 'localhost',
+        port: allocatedPort,
+      },
+      config,
+    );
 
     const connectionInfo: ConnectionInfo = {
       ...connectionDetails,
@@ -348,7 +371,7 @@ EXIT;
           const hcResult = await this.dockerClient.execCommand(
             DOCKER_IMAGE_CONFIG.containerName,
             ['/opt/oracle/healthcheck.sh'],
-            'oracle'
+            'oracle',
           );
           if (hcResult.ok) {
             return success(undefined);
@@ -386,7 +409,10 @@ EXIT;
    * Construye los port bindings para Docker según el motor y el puerto objetivo.
    * SQLite no necesita port bindings (puerto 0).
    */
-  private buildPortBindings(engine: EngineDefinition, targetPort: number): Record<string, Array<{ HostPort: string }>> {
+  private buildPortBindings(
+    engine: EngineDefinition,
+    targetPort: number,
+  ): Record<string, Array<{ HostPort: string }>> {
     if (engine.defaultPort === 0) {
       return {};
     }
