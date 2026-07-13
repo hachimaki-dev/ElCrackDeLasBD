@@ -184,9 +184,26 @@ export class DockerClient {
           }
         }
       } else if (os === 'linux') {
-        // En Linux usamos systemctl --user start docker-desktop, asumiendo Docker Desktop.
-        await execAsync('systemctl --user start docker-desktop');
-        return true;
+        // En Linux, primero intentamos Docker Desktop
+        try {
+          await execAsync('systemctl --user start docker-desktop');
+          return true;
+        } catch {
+          // Si falla, asumimos que es Docker Engine nativo.
+          // Usamos pkexec para pedir permisos de sudo con interfaz gráfica nativa.
+          try {
+            await execAsync('pkexec systemctl start docker');
+            return true;
+          } catch {
+            // Fallback para distribuciones sin systemd
+            try {
+              await execAsync('pkexec service docker start');
+              return true;
+            } catch {
+              return false;
+            }
+          }
+        }
       }
       return false;
     } catch {

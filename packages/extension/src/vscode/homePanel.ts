@@ -55,20 +55,25 @@ export class HomePanel {
     });
 
     this.panel.webview.onDidReceiveMessage(async (message: any) => {
-      if (message.command === 'executeCommand') {
-        if (message.args) {
-          await vscode.commands.executeCommand(message.action, ...message.args);
-        } else {
-          await vscode.commands.executeCommand(message.action);
+      this.lifecycle.emit('diagnosticLog', `[HomePanel] Webview message received: ${JSON.stringify(message)}`);
+      try {
+        if (message.command === 'executeCommand') {
+          if (message.args) {
+            await vscode.commands.executeCommand(message.action, ...message.args);
+          } else {
+            await vscode.commands.executeCommand(message.action);
+          }
+        } else if (message.command === 'openExternal') {
+          await vscode.env.openExternal(vscode.Uri.parse(message.url));
+        } else if (message.command === 'retrySetup') {
+          await this.runSetupFlow();
+        } else if (message.command === 'startDocker') {
+          await this.handleStartDocker();
+        } else if (message.command === 'getInitialState') {
+          this.updateWebviewState();
         }
-      } else if (message.command === 'openExternal') {
-        await vscode.env.openExternal(vscode.Uri.parse(message.url));
-      } else if (message.command === 'retrySetup') {
-        this.runSetupFlow();
-      } else if (message.command === 'startDocker') {
-        this.handleStartDocker();
-      } else if (message.command === 'getInitialState') {
-        this.updateWebviewState();
+      } catch (err: any) {
+        this.lifecycle.emit('diagnosticLog', `[HomePanel] Error handling message: ${err?.message || err}`);
       }
     });
 
@@ -108,13 +113,16 @@ export class HomePanel {
   }
 
   private async runSetupFlow(): Promise<void> {
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] runSetupFlow: Starting setup flow...`);
     this.isPolling = false;
     this.setState('checking_docker');
 
     const platform = detectPlatform();
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] Detected platform: ${JSON.stringify(platform)}`);
 
     // 1. Check if Docker is installed
     const isInstalled = await this.dockerClient.isDockerInstalled(platform.os);
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] isDockerInstalled: ${isInstalled}`);
     if (!isInstalled) {
       this.setState('docker_not_installed');
       return;
@@ -122,21 +130,33 @@ export class HomePanel {
 
     // 2. Check if Docker is running
     const dockerStatus = await this.dockerClient.checkDockerAvailability();
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] checkDockerAvailability: ${JSON.stringify(dockerStatus)}`);
     if (!dockerStatus.ok) {
       this.setState('docker_not_running');
       return;
     }
 
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] Docker is running, checking Oracle image...`);
     await this.checkOracleAndFinish();
   }
 
   private async handleStartDocker(): Promise<void> {
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] handleStartDocker: Starting Docker...`);
     this.setState('starting_docker');
     const platform = detectPlatform();
+
+    if (platform.os === 'linux') {
+      void vscode.window.showInformationMessage(
+        'Iniciando Docker: Se te pedirá tu contraseña de sistema para iniciar el servicio. Si prefieres no usarla, puedes cancelar y ejecutar manualmente "sudo systemctl start docker" en tu terminal.',
+      );
+    }
+
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] Invoking startDockerDesktop...`);
     const started = await this.dockerClient.startDockerDesktop(platform.os);
+    this.lifecycle.emit('diagnosticLog', `[HomePanel] startDockerDesktop returned: ${started}`);
     
     if (!started) {
-      void vscode.window.showWarningMessage('No pudimos iniciar Docker automáticamente. Por favor, ábrelo manualmente e inténtalo de nuevo.');
+      void vscode.window.showWarningMessage('No pudimos iniciar Docker automáticamente o cancelaste la petición. Por favor, ábrelo manualmente e inténtalo de nuevo.');
       this.setState('docker_not_running');
       return;
     }
@@ -152,12 +172,15 @@ export class HomePanel {
 
     const maxAttempts = 60; // Hasta 1 minuto de polling (1s por intento)
     for (let i = 0; i < maxAttempts; i++) {
+      this.lifecycle.emit('diagnosticLog', `[HomePanel] Polling Docker (Attempt ${i + 1}/${maxAttempts})...`);
       // Si el usuario cambia de estado manualmente o cerramos panel, rompemos el polling
       if (!this.isPolling) {
+        this.lifecycle.emit('diagnosticLog', `[HomePanel] Polling cancelled.`);
         return;
       }
 
       const status = await this.dockerClient.checkDockerAvailability();
+      this.lifecycle.emit('diagnosticLog', `[HomePanel] Polling status: ${JSON.stringify(status)}`);
       if (status.ok) {
         this.isPolling = false;
         await this.checkOracleAndFinish();
