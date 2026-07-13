@@ -59,7 +59,15 @@ export function registerCommands(
     // Mostrar Home / Setup (Flujo 0)
     // ------------------------------------------------------------------
     vscode.commands.registerCommand('sqlEngineLab.showHome', () => {
-      HomePanel.createOrShow(context.extensionUri, dockerClient);
+      HomePanel.createOrShow(
+        context.extensionUri,
+        dockerClient,
+        lifecycle,
+        progressManager,
+        () => {
+          treeProvider.setIsReady(true);
+        }
+      );
     }),
 
     // ------------------------------------------------------------------

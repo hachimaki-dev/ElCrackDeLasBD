@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { DockerClient } from '../core/docker/dockerClient';
-import { getEngineById } from '../core/engines/registry';
-import { PullProgress } from '../core/engines/engine.types';
+import { getEngineById, getAllEngines } from '../core/engines/registry';
+import { PullProgress, EngineStatus } from '../core/engines/engine.types';
 import { detectPlatform } from '../core/docker/platformInfo';
+import { ContainerLifecycle } from '../core/docker/containerLifecycle';
+import { ProgressManager } from '../core/progress/progressManager';
 
 export type HomeState = 'checking_docker' | 'docker_not_installed' | 'docker_not_running' | 'starting_docker' | 'pulling_images' | 'ready';
 
@@ -12,24 +14,44 @@ export class HomePanel {
   private readonly panel: vscode.WebviewPanel;
   private readonly dockerClient: DockerClient;
   private readonly extensionUri: vscode.Uri;
+  private readonly lifecycle: ContainerLifecycle;
+  private readonly progressManager: ProgressManager;
   private currentState: HomeState = 'checking_docker';
   private pullProgress?: PullProgress;
   private isPolling = false;
+  private readonly onReadyCallback?: () => void;
 
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    dockerClient: DockerClient
+    dockerClient: DockerClient,
+    lifecycle: ContainerLifecycle,
+    progressManager: ProgressManager,
+    onReady?: () => void
   ) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.dockerClient = dockerClient;
+    this.lifecycle = lifecycle;
+    this.progressManager = progressManager;
+    this.onReadyCallback = onReady;
 
     this.panel.webview.html = this.buildHtml();
     
+    // Escuchar eventos del ciclo de vida para sincronizar la UI en tiempo real
+    const statusListener = () => {
+      this.updateWebviewState();
+    };
+    this.lifecycle.on('statusChanged', statusListener);
+    this.lifecycle.on('engineStarted', statusListener);
+    this.lifecycle.on('engineStopped', statusListener);
+
     this.panel.onDidDispose(() => {
       HomePanel.currentPanel = undefined;
       this.isPolling = false;
+      this.lifecycle.removeListener('statusChanged', statusListener);
+      this.lifecycle.removeListener('engineStarted', statusListener);
+      this.lifecycle.removeListener('engineStopped', statusListener);
     });
 
     this.panel.webview.onDidReceiveMessage(async (message: any) => {
@@ -53,7 +75,13 @@ export class HomePanel {
     this.runSetupFlow();
   }
 
-  static createOrShow(extensionUri: vscode.Uri, dockerClient: DockerClient): void {
+  static createOrShow(
+    extensionUri: vscode.Uri,
+    dockerClient: DockerClient,
+    lifecycle: ContainerLifecycle,
+    progressManager: ProgressManager,
+    onReady?: () => void
+  ): void {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : vscode.ViewColumn.One;
@@ -73,15 +101,17 @@ export class HomePanel {
       }
     );
 
-    HomePanel.currentPanel = new HomePanel(panel, extensionUri, dockerClient);
+    HomePanel.currentPanel = new HomePanel(panel, extensionUri, dockerClient, lifecycle, progressManager, onReady);
   }
 
   private async runSetupFlow(): Promise<void> {
     this.isPolling = false;
     this.setState('checking_docker');
 
+    const platform = detectPlatform();
+
     // 1. Check if Docker is installed
-    const isInstalled = await this.dockerClient.isDockerInstalled();
+    const isInstalled = await this.dockerClient.isDockerInstalled(platform.os);
     if (!isInstalled) {
       this.setState('docker_not_installed');
       return;
@@ -100,9 +130,15 @@ export class HomePanel {
   private async handleStartDocker(): Promise<void> {
     this.setState('starting_docker');
     const platform = detectPlatform();
-    await this.dockerClient.startDockerDesktop(platform.os);
+    const started = await this.dockerClient.startDockerDesktop(platform.os);
     
-    // Si pudo lanzar el comando (o no), empezamos el polling para ver si levanta
+    if (!started) {
+      void vscode.window.showWarningMessage('No pudimos iniciar Docker automáticamente. Por favor, ábrelo manualmente e inténtalo de nuevo.');
+      this.setState('docker_not_running');
+      return;
+    }
+
+    // Si pudo lanzar el comando, empezamos el polling para ver si levanta
     this.pollDockerUntilRunning();
   }
 
@@ -152,6 +188,11 @@ export class HomePanel {
 
     // Ready
     this.setState('ready');
+    // Desbloquear la extensión
+    await vscode.commands.executeCommand('setContext', 'sqlEngineLab.isReady', true);
+    if (this.onReadyCallback) {
+      this.onReadyCallback();
+    }
   }
 
   private setState(state: HomeState) {
@@ -160,10 +201,78 @@ export class HomePanel {
   }
 
   private updateWebviewState() {
+    const enginesList = getAllEngines();
+    const activeEngineId = this.lifecycle.getCurrentEngine();
+    const activeEngineStatus = this.lifecycle.getStatus();
+    const activeConnection = this.lifecycle.getCurrentConnectionInfo();
+
+    const enginesData = enginesList.map(engine => {
+      let status: EngineStatus = 'stopped';
+      if (activeEngineId === engine.id) {
+        status = activeEngineStatus;
+      }
+      return {
+        id: engine.id,
+        displayName: engine.displayName,
+        status,
+        port: engine.defaultPort,
+      };
+    });
+
+    // Gamificación unificada
+    let totalXp = 0;
+    const badgeMap = new Map<string, { id: string; name: string; description: string; icon: string; unlockedAt: string }>();
+
+    for (const engine of enginesList) {
+      const progress = this.progressManager.getEngineProgress(engine.id);
+      const engineXp = (progress.xp.ddl || 0) + (progress.xp.dml || 0) + (progress.xp.optimization || 0) + (progress.xp.architecture || 0);
+      totalXp += engineXp;
+
+      if (progress.badges) {
+        for (const badgeId of progress.badges) {
+          if (!badgeMap.has(badgeId)) {
+            let name = badgeId;
+            let description = 'Insignia de honor';
+            let icon = '🏆';
+            if (badgeId === 'maestro_optimizador') {
+              name = 'Maestro Optimizador';
+              description = 'Performance y optimización refinada';
+              icon = '⚡';
+            } else if (badgeId === 'guardian_acid') {
+              name = 'Guardián ACID';
+              description = 'Consistencia y atomicidad transaccional';
+              icon = '🛡️';
+            }
+            badgeMap.set(badgeId, {
+              id: badgeId,
+              name,
+              description,
+              icon,
+              unlockedAt: engine.displayName
+            });
+          }
+        }
+      }
+    }
+
+    const XP_PER_LEVEL = 1000;
+    const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
+    const xpInLevel = totalXp % XP_PER_LEVEL;
+
+    const gamification = {
+      xp: totalXp,
+      level,
+      xpToNextLevel: XP_PER_LEVEL - xpInLevel,
+      badges: Array.from(badgeMap.values()),
+    };
+
     void this.panel.webview.postMessage({
       command: 'updateHomeState',
       state: this.currentState,
-      progress: this.pullProgress,
+      pullProgress: this.pullProgress,
+      engines: enginesData,
+      activeConnection: activeConnection || undefined,
+      progress: gamification,
     });
   }
 

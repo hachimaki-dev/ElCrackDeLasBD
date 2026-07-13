@@ -17,6 +17,7 @@ import { resolveDockerOptions } from './dockerConfigResolver';
 import { Result, success, failure, PullProgress } from '../engines/engine.types';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -45,15 +46,38 @@ export class DockerClient {
     this.docker = dockerodeInstance ?? new Dockerode(resolveDockerOptions());
   }
 
+  private getWindowsDockerPaths(): string[] {
+    return [
+      'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
+      'D:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
+      process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Docker\\Docker\\Docker Desktop.exe` : ''
+    ].filter(p => p !== '');
+  }
+
+  private getMacDockerPaths(): string[] {
+    return [
+      '/Applications/Docker.app',
+      process.env.HOME ? `${process.env.HOME}/Applications/Docker.app` : ''
+    ].filter(p => p !== '');
+  }
+
   /**
    * Verifica si Docker está instalado en el sistema usando el CLI.
-   * @returns true si el comando docker existe, false si no.
+   * Si no está en el PATH, intenta buscar en las rutas por defecto según el SO.
+   * @param osPlatform - Plataforma actual (darwin, win32, linux)
+   * @returns true si el comando docker existe o está en ruta por defecto, false si no.
    */
-  async isDockerInstalled(): Promise<boolean> {
+  async isDockerInstalled(osPlatform?: string): Promise<boolean> {
     try {
       await execAsync('docker --version');
       return true;
     } catch {
+      // Fallback a rutas comunes si docker no está en el PATH
+      if (osPlatform === 'darwin') {
+        return this.getMacDockerPaths().some(p => fs.existsSync(p));
+      } else if (osPlatform === 'win32') {
+        return this.getWindowsDockerPaths().some(p => fs.existsSync(p));
+      }
       return false;
     }
   }
@@ -66,11 +90,21 @@ export class DockerClient {
   async startDockerDesktop(os: string): Promise<boolean> {
     try {
       if (os === 'darwin') {
-        await execAsync('open -a Docker');
-        return true;
+        const paths = this.getMacDockerPaths();
+        for (const p of paths) {
+          if (fs.existsSync(p)) {
+            await execAsync(`open -a "${p}"`);
+            return true;
+          }
+        }
       } else if (os === 'win32') {
-        await execAsync('start "" "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"');
-        return true;
+        const paths = this.getWindowsDockerPaths();
+        for (const p of paths) {
+          if (fs.existsSync(p)) {
+            await execAsync(`powershell -Command "Start-Process '${p}'"`);
+            return true;
+          }
+        }
       } else if (os === 'linux') {
         // En Linux usamos systemctl --user start docker-desktop, asumiendo Docker Desktop.
         await execAsync('systemctl --user start docker-desktop');

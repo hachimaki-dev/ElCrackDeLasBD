@@ -41,6 +41,9 @@ export function activate(context: vscode.ExtensionContext): void {
   outputChannel.appendLine(`Timestamp: ${new Date().toISOString()}`);
   outputChannel.appendLine('');
 
+  // ---- Bloquear extensión hasta completar Flujo 0 ----
+  void vscode.commands.executeCommand('setContext', 'sqlEngineLab.isReady', false);
+
   // ---- Crear instancias de las piezas core ----
   const dockerClient = new DockerClient();
   const configProvider = new VsCodeConfigurationProvider();

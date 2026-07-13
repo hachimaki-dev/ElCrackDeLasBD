@@ -87,6 +87,8 @@ export class EngineTreeViewProvider implements vscode.TreeDataProvider<EngineTre
 
   /** Estado de cada motor en el árbol */
   private readonly engineStatuses = new Map<EngineId, EngineStatus>();
+  
+  private isReady = false;
 
   constructor(private readonly lifecycle: ContainerLifecycle) {
     // Inicializar todos los motores como detenidos
@@ -114,7 +116,15 @@ export class EngineTreeViewProvider implements vscode.TreeDataProvider<EngineTre
     return element;
   }
 
+  setIsReady(isReady: boolean): void {
+    this.isReady = isReady;
+    this.refresh();
+  }
+
   getChildren(): EngineTreeItem[] {
+    if (!this.isReady) {
+      return [];
+    }
     return getAllEngines().map(
       (engine) => new EngineTreeItem(engine, this.engineStatuses.get(engine.id) ?? 'stopped'),
     );

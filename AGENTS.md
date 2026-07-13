@@ -30,3 +30,8 @@
 - [ ] ¿Se actualizó TASKS.md?
 - [ ] ¿Decisión estructural nueva? → Crear ADR en `decisions/`.
 - [ ] ¿Pieza nueva del sistema? → Actualizar ARCHITECTURE.md.
+
+## Lecciones Aprendidas (Gotchas)
+
+- **Desarrollo de la UI (Webview):** El código React de la UI se encuentra en `packages/webview-ui`. Este **no se compila automáticamente** al correr `npm run compile` en la extensión. Si haces cambios en la UI, debes ejecutar explícitamente `npm install` y `npm run build` dentro de `packages/webview-ui` para generar los assets en la carpeta `out` de la extensión. De lo contrario, el panel webview aparecerá en blanco.
+- **VS Code `viewsWelcome` (Mensajes de Bienvenida):** Una vista de bienvenida configurada en el `package.json` **SOLO** se mostrará si el `TreeDataProvider` asociado retorna un arreglo vacío (`[]`) en su método `getChildren()`. Si el proveedor devuelve cualquier elemento (aunque la cláusula `when` del `viewsWelcome` sea verdadera), el mensaje de bienvenida se ocultará.

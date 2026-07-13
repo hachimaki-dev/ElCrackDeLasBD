@@ -51,6 +51,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "sqlEngineLab.engineList",
+        "contents": "SQL Engine Laboratory se está inicializando.\n\nPor favor, completa el proceso de verificación de Docker en la pestaña de inicio para desbloquear los motores.\n[Mostrar Inicio](command:sqlEngineLab.showHome)",
+        "when": "!sqlEngineLab.isReady"
+      }
+    ],
     "commands": [
       {
         "command": "sqlEngineLab.startEngine",
@@ -117,29 +124,29 @@
       "view/title": [
         {
           "command": "sqlEngineLab.configureCredentials",
-          "when": "view == sqlEngineLab.engineList",
+          "when": "view == sqlEngineLab.engineList && sqlEngineLab.isReady",
           "group": "navigation@1"
         },
         {
           "command": "sqlEngineLab.refreshEngines",
-          "when": "view == sqlEngineLab.engineList",
+          "when": "view == sqlEngineLab.engineList && sqlEngineLab.isReady",
           "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
           "command": "sqlEngineLab.startEngine",
-          "when": "view == sqlEngineLab.engineList && viewItem == engine-stopped",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-stopped && sqlEngineLab.isReady",
           "group": "inline"
         },
         {
           "command": "sqlEngineLab.stopEngine",
-          "when": "view == sqlEngineLab.engineList && viewItem == engine-running",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-running && sqlEngineLab.isReady",
           "group": "inline"
         },
         {
           "command": "sqlEngineLab.showConnectionInfo",
-          "when": "view == sqlEngineLab.engineList && viewItem == engine-running",
+          "when": "view == sqlEngineLab.engineList && viewItem == engine-running && sqlEngineLab.isReady",
           "group": "inline"
         }
       ],

@@ -46,6 +46,7 @@ import { detectPlatform, getEmulationWarning, PlatformInfo } from './platformInf
 export class ContainerLifecycle extends EventEmitter {
   private currentEngineId: EngineId | null = null;
   private currentStatus: EngineStatus = 'stopped';
+  private currentConnectionInfo: ConnectionInfo | null = null;
   private readonly dockerClient: DockerClient;
   private readonly configProvider?: ConfigurationProvider;
   private readonly platform: PlatformInfo;
@@ -278,6 +279,7 @@ EXIT;
       'running',
       `${engine.displayName} listo en puerto ${allocatedPort}`,
     );
+    this.currentConnectionInfo = connectionInfo;
     this.emit('engineStarted', connectionInfo);
 
     return success(connectionInfo);
@@ -311,6 +313,7 @@ EXIT;
 
     this.currentEngineId = null;
     this.currentStatus = 'stopped';
+    this.currentConnectionInfo = null;
 
     return success(undefined);
   }
@@ -327,6 +330,13 @@ EXIT;
    */
   getStatus(): EngineStatus {
     return this.currentStatus;
+  }
+
+  /**
+   * Retorna la información de conexión activa del motor en ejecución, o null si no hay ninguno.
+   */
+  getCurrentConnectionInfo(): ConnectionInfo | null {
+    return this.currentConnectionInfo;
   }
 
   /**
