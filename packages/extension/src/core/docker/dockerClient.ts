@@ -101,6 +101,33 @@ export class DockerClient {
       // Ignorar si falla la consulta
     }
 
+    // Búsqueda dinámica con where.exe docker para inferir la ruta de instalación
+    try {
+      const { stdout: whereDocker } = await execAsync(`where.exe docker`);
+      if (whereDocker && whereDocker.trim()) {
+        const firstPath = whereDocker.split('\n')[0].trim();
+        if (firstPath.toLowerCase().includes('docker')) {
+          // Si where.exe devuelve C:\Program Files\Docker\Docker\resources\bin\docker.exe
+          // Inferimos el directorio base subiendo un par de niveles
+          const pathSegments = firstPath.split('\\');
+          let baseDir = '';
+          const resourcesIndex = pathSegments.findIndex(s => s.toLowerCase() === 'resources');
+          if (resourcesIndex !== -1) {
+            baseDir = pathSegments.slice(0, resourcesIndex).join('\\');
+          } else {
+            // Si no tiene resources, subimos un nivel (asumiendo que está en una carpeta bin o similar)
+            baseDir = pathSegments.slice(0, -1).join('\\');
+          }
+          if (baseDir) {
+            paths.unshift(`${baseDir}\\Docker Desktop.exe`);
+            paths.unshift(`${baseDir}\\frontend\\Docker Desktop.exe`);
+          }
+        }
+      }
+    } catch {
+      // Ignorar si where.exe falla
+    }
+
     return Array.from(new Set(paths.filter(Boolean)));
   }
 

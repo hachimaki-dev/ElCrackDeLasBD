@@ -2,6 +2,16 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "build-webview",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceRoot}/packages/webview-ui"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
       "label": "compile-extension",
       "type": "shell",
       "command": "npm run compile",
@@ -11,10 +21,17 @@
       "problemMatcher": [
         "$tsc"
       ],
+      "group": "build"
+    },
+    {
+      "label": "build-all",
+      "dependsOn": ["build-webview", "compile-extension"],
+      "dependsOrder": "sequence",
       "group": {
         "kind": "build",
         "isDefault": true
-      }
+      },
+      "problemMatcher": []
     }
   ]
 }
