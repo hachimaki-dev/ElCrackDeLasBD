@@ -68,3 +68,5 @@ _(nada)_
 - [x] Rediseño de interfaz de tutoriales estilo "Hackerman Profesional" sofisticado y arquitectura de libro con capítulos interactivos y secciones de datos enriquecidos (agente: antigravity, completado 2026-07-12)
 - [x] Rework premium de la pestaña Home con navegación lateral en grid, widgets de estado de motores en vivo y sincronización de progreso gamificado (XP, nivel y vitrina de emblemas) (agente: antigravity, completado 2026-07-13)
 - [x] Corrección de inicialización (Flujo 0) en Windows: centralización de la API de VS Code para evitar múltiples llamadas de acquireVsCodeApi, y búsqueda resiliente de Docker Desktop en el registro y rutas de laboratorio (agente: antigravity, completado 2026-07-13)
+- [x] Solución definitiva para pantalla en blanco en Windows: configuración explícita de localResourceRoots en paneles, inicialización asíncrona del DOM en main.tsx y ampliación del CSP para Google Fonts (agente: antigravity, completado 2026-07-13)
+

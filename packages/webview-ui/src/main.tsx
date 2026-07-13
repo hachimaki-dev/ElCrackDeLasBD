@@ -4,11 +4,22 @@ import './index.css'
 import App from './App.tsx'
 import { HomeApp } from './HomeApp.tsx'
 
-const rootElement = document.getElementById('root');
-const isHomeView = rootElement?.dataset.view === 'home';
+const init = () => {
+  const rootElement = document.getElementById('root');
+  if (rootElement) {
+    const isHomeView = rootElement.dataset.view === 'home';
+    createRoot(rootElement).render(
+      <StrictMode>
+        {isHomeView ? <HomeApp /> : <App />}
+      </StrictMode>
+    );
+  } else {
+    console.error('SQL Engine Lab: Root element not found in DOM.');
+  }
+};
 
-createRoot(rootElement!).render(
-  <StrictMode>
-    {isHomeView ? <HomeApp /> : <App />}
-  </StrictMode>,
-)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

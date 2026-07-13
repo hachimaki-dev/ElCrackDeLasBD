@@ -115,6 +115,9 @@ export class ConnectionPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, 'out'),
+        ],
       },
     );
 
@@ -238,7 +241,7 @@ export class ConnectionPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} https://fonts.gstatic.com;">
   <title>SQL Engine Lab</title>
   <link rel="stylesheet" href="${stylesUri.toString()}">
 </head>
