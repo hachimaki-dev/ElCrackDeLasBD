@@ -100,6 +100,9 @@ export function activate(context: vscode.ExtensionContext): void {
       void lifecycle.stopEngine();
     }),
   );
+
+  // ---- Iniciar el Flujo 0 / Mostrar Home al arrancar ----
+  void vscode.commands.executeCommand('sqlEngineLab.showHome');
 }
 
 /**

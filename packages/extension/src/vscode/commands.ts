@@ -22,6 +22,7 @@ import { DockerClient } from '../core/docker/dockerClient';
 import { runDoctorFormatted } from '../core/docker/dockerDiagnostics';
 import { EngineTreeViewProvider } from './treeView';
 import { ConnectionPanel } from './connectionPanel';
+import { HomePanel } from './homePanel';
 
 /**
  * Registra todos los comandos de la extensión en el contexto de VS Code.
@@ -54,6 +55,13 @@ export function registerCommands(
   });
 
   const disposables: vscode.Disposable[] = [
+    // ------------------------------------------------------------------
+    // Mostrar Home / Setup (Flujo 0)
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.showHome', () => {
+      HomePanel.createOrShow(context.extensionUri, dockerClient);
+    }),
+
     // ------------------------------------------------------------------
     // Iniciar motor
     // ------------------------------------------------------------------

@@ -17,6 +17,7 @@ export class ConnectionPanel {
   private currentEngine: EngineDefinition;
   private currentInfo?: ConnectionInfo;
   private currentStatus?: EngineStatus;
+  private currentMessage?: string;
   private engineProgress?: any; // any to avoid direct import coupling if possible, or import EngineProgress
 
   private constructor(
@@ -25,12 +26,14 @@ export class ConnectionPanel {
     engine: EngineDefinition,
     connectionInfo?: ConnectionInfo,
     status?: EngineStatus,
+    message?: string,
     engineProgress?: any,
   ) {
     this.panel = panel;
     this.currentEngine = engine;
     this.currentInfo = connectionInfo;
     this.currentStatus = status;
+    this.currentMessage = message;
     if (engineProgress) this.engineProgress = engineProgress;
 
     this.update();
@@ -99,6 +102,7 @@ export class ConnectionPanel {
       ConnectionPanel.currentPanel.currentEngine = engine;
       ConnectionPanel.currentPanel.currentInfo = connectionInfo;
       ConnectionPanel.currentPanel.currentStatus = status;
+      ConnectionPanel.currentPanel.currentMessage = _message;
       if (engineProgress) ConnectionPanel.currentPanel.engineProgress = engineProgress;
       ConnectionPanel.currentPanel.update();
       return;
@@ -120,6 +124,7 @@ export class ConnectionPanel {
       engine,
       connectionInfo,
       status,
+      _message,
       engineProgress,
     );
   }
@@ -206,6 +211,7 @@ export class ConnectionPanel {
         id: this.currentEngine.id,
         displayName: this.currentEngine.displayName,
         status: this.currentStatus,
+        message: this.currentMessage,
         connectionCommand: this.currentInfo?.connectionCommand,
         port: this.currentInfo?.port,
         engineProgress: this.engineProgress,

@@ -15,6 +15,10 @@
 import Dockerode from 'dockerode';
 import { resolveDockerOptions } from './dockerConfigResolver';
 import { Result, success, failure, PullProgress } from '../engines/engine.types';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * Callback para reportar progreso de descarga de imagen.
@@ -42,18 +46,57 @@ export class DockerClient {
   }
 
   /**
-   * Verifica que Docker esté corriendo y accesible.
-   *
-   * @returns Result vacío si Docker está disponible, o error DOCKER_NOT_RUNNING
+   * Verifica si Docker está instalado en el sistema usando el CLI.
+   * @returns true si el comando docker existe, false si no.
    */
+  async isDockerInstalled(): Promise<boolean> {
+    try {
+      await execAsync('docker --version');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Intenta levantar Docker Desktop de forma automática según el SO.
+   * @param os El sistema operativo detectado (darwin, win32, linux)
+   * @returns true si se lanzó el comando sin error.
+   */
+  async startDockerDesktop(os: string): Promise<boolean> {
+    try {
+      if (os === 'darwin') {
+        await execAsync('open -a Docker');
+        return true;
+      } else if (os === 'win32') {
+        await execAsync('start "" "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"');
+        return true;
+      } else if (os === 'linux') {
+        // En Linux usamos systemctl --user start docker-desktop, asumiendo Docker Desktop.
+        await execAsync('systemctl --user start docker-desktop');
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   async checkDockerAvailability(): Promise<Result<void>> {
     try {
-      await this.docker.ping();
+      // Use Promise.race to enforce a timeout on the ping request,
+      // as it might hang indefinitely while Docker Desktop is starting.
+      const pingPromise = this.docker.ping();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Ping timeout')), 2000);
+      });
+
+      await Promise.race([pingPromise, timeoutPromise]);
       return success(undefined);
     } catch (error) {
       return failure({
         code: 'DOCKER_NOT_RUNNING',
-        message: 'Docker no está corriendo. Por favor, inicia Docker Desktop antes de continuar.',
+        message: 'Docker no está corriendo o está tardando demasiado en responder.',
         cause: error instanceof Error ? error : new Error(String(error)),
       });
     }

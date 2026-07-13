@@ -6,9 +6,10 @@ import { GamerProfile } from './components/GamerProfile';
 interface EngineState {
   id: string;
   displayName: string;
-  status: 'running' | 'stopped' | 'error' | 'loading' | 'starting';
+  status: 'running' | 'stopped' | 'error' | 'loading' | 'starting' | 'pulling';
   connectionCommand?: string;
   port?: number;
+  message?: string;
   engineProgress?: {
     completedModules: string[];
     xp: { ddl: number; dml: number; optimization: number; architecture: number };
@@ -219,6 +220,36 @@ function App() {
 
   return (
     <div className="hachimaki-dashboard">
+      {(engine?.status === 'pulling' || engine?.status === 'starting' || engine?.status === 'loading') && (
+        <div className="blocking-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(30, 30, 30, 0.9)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--vscode-editorWidget-background)', padding: '3rem', borderRadius: '12px',
+            border: '1px solid var(--vscode-widget-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            textAlign: 'center', maxWidth: '500px', width: '100%'
+          }}>
+            {engine.status === 'pulling' ? (
+              <div style={{ fontSize: '48px', margin: '0 0 1rem 0', animation: 'pulse 2s infinite' }}>📦</div>
+            ) : (
+              <div className="loader" style={{ margin: '0 auto 1.5rem auto', border: '4px solid var(--vscode-editor-background)', borderTop: '4px solid var(--accent-primary, #007acc)', borderRadius: '50%', width: '40px', height: '40px', animation: 'spin 1s linear infinite' }}></div>
+            )}
+            <h2 style={{ fontSize: '20px', marginBottom: '0.5rem', color: 'var(--accent-primary, #007acc)' }}>
+              {engine.status === 'pulling' ? 'Descargando Motor...' : 'Iniciando Entorno...'}
+            </h2>
+            <p style={{ fontSize: '16px', fontWeight: '500', marginBottom: '0.5rem' }}>{engine.displayName}</p>
+            <p style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '13px' }}>{engine.message || 'Por favor espera...'}</p>
+          </div>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
+          `}} />
+        </div>
+      )}
+
       <div className="header-title">
         <h1>SQL Engine <span>Lab</span></h1>
         
