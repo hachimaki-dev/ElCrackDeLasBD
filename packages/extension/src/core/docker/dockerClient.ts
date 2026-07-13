@@ -46,12 +46,62 @@ export class DockerClient {
     this.docker = dockerodeInstance ?? new Dockerode(resolveDockerOptions());
   }
 
-  private getWindowsDockerPaths(): string[] {
-    return [
+  private async getWindowsDockerPaths(): Promise<string[]> {
+    const paths: string[] = [
       'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
+      'C:\\Program Files\\Docker\\Docker\\frontend\\Docker Desktop.exe',
+      'C:\\Program Files\\Docker\\Docker\\frontend\\DockerDesktop.exe',
       'D:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
-      process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Docker\\Docker\\Docker Desktop.exe` : ''
-    ].filter(p => p !== '');
+      'D:\\Program Files\\Docker\\Docker\\frontend\\Docker Desktop.exe',
+    ];
+
+    // Cargar variables de entorno comunes
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env.LOCALAPPDATA;
+    const userProfile = process.env.USERPROFILE;
+
+    paths.push(`${programFiles}\\Docker\\Docker\\Docker Desktop.exe`);
+    paths.push(`${programFiles}\\Docker\\Docker\\frontend\\Docker Desktop.exe`);
+    paths.push(`${programFilesX86}\\Docker\\Docker\\Docker Desktop.exe`);
+    paths.push(`${programFilesX86}\\Docker\\Docker\\frontend\\Docker Desktop.exe`);
+
+    if (localAppData) {
+      paths.push(`${localAppData}\\Docker\\Docker\\Docker Desktop.exe`);
+      paths.push(`${localAppData}\\Docker\\Docker\\frontend\\Docker Desktop.exe`);
+    }
+    if (userProfile) {
+      paths.push(`${userProfile}\\Applications\\Docker Desktop.exe`);
+    }
+
+    // Consulta de Registro 1: App Paths para Docker Desktop.exe
+    try {
+      const { stdout: appPath } = await execAsync(
+        `powershell -Command "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Docker Desktop.exe' -ErrorAction SilentlyContinue).'(default)'"`
+      );
+      if (appPath && appPath.trim()) {
+        paths.unshift(appPath.trim());
+      }
+    } catch {
+      // Ignorar si falla la consulta
+    }
+
+    // Consulta de Registro 2: Clave de instalación de Docker Inc
+    try {
+      const { stdout: installPath } = await execAsync(
+        `powershell -Command "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Docker Inc.\\Docker' -ErrorAction SilentlyContinue).InstallPath"`
+      );
+      if (installPath && installPath.trim()) {
+        const cleanPath = installPath.trim();
+        paths.unshift(`${cleanPath}\\Docker Desktop.exe`);
+        paths.unshift(`${cleanPath}\\Docker\\Docker Desktop.exe`);
+        paths.unshift(`${cleanPath}\\frontend\\Docker Desktop.exe`);
+      }
+    } catch {
+      // Ignorar si falla la consulta
+    }
+
+    return Array.from(new Set(paths.filter(Boolean)));
   }
 
   private getMacDockerPaths(): string[] {
@@ -76,7 +126,8 @@ export class DockerClient {
       if (osPlatform === 'darwin') {
         return this.getMacDockerPaths().some(p => fs.existsSync(p));
       } else if (osPlatform === 'win32') {
-        return this.getWindowsDockerPaths().some(p => fs.existsSync(p));
+        const winPaths = await this.getWindowsDockerPaths();
+        return winPaths.some(p => fs.existsSync(p));
       }
       return false;
     }
@@ -98,7 +149,7 @@ export class DockerClient {
           }
         }
       } else if (os === 'win32') {
-        const paths = this.getWindowsDockerPaths();
+        const paths = await this.getWindowsDockerPaths();
         for (const p of paths) {
           if (fs.existsSync(p)) {
             await execAsync(`powershell -Command "Start-Process '${p}'"`);

@@ -293,10 +293,6 @@ export class HomePanel {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:;">
   <title>SQL Engine Lab</title>
   <link rel="stylesheet" href="${stylesUri.toString()}">
-  <script>
-    const vscode = acquireVsCodeApi();
-    window.acquireVsCodeApi = () => vscode;
-  </script>
 </head>
 <body>
   <div id="root" data-view="home"></div>

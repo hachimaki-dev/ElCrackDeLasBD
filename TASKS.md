@@ -67,3 +67,4 @@ _(nada)_
 - [x] Creación de Hojas SQL interactivas con ejecución remota vía docker exec y gestor de perfiles persistentes, manteniendo abstracción del ciclo de vida de motores (agente: antigravity, completado 2026-07-11)
 - [x] Rediseño de interfaz de tutoriales estilo "Hackerman Profesional" sofisticado y arquitectura de libro con capítulos interactivos y secciones de datos enriquecidos (agente: antigravity, completado 2026-07-12)
 - [x] Rework premium de la pestaña Home con navegación lateral en grid, widgets de estado de motores en vivo y sincronización de progreso gamificado (XP, nivel y vitrina de emblemas) (agente: antigravity, completado 2026-07-13)
+- [x] Corrección de inicialización (Flujo 0) en Windows: centralización de la API de VS Code para evitar múltiples llamadas de acquireVsCodeApi, y búsqueda resiliente de Docker Desktop en el registro y rutas de laboratorio (agente: antigravity, completado 2026-07-13)

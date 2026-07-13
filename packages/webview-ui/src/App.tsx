@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getEnrichedContent } from './data/enrichedTutorials';
 import { GamerProfile } from './components/GamerProfile';
+import { vscode } from './vscode';
 
 // Tipos base
 interface EngineState {
@@ -157,31 +158,17 @@ function App() {
   }, []);
 
   const handleStartTutorial = (moduleId: string) => {
-    // @ts-ignore - vscode api is injected
-    if (typeof acquireVsCodeApi !== 'undefined') {
-      // @ts-ignore
-      const vscode = acquireVsCodeApi();
-      vscode.postMessage({
-        command: 'startTutorial',
-        moduleId: moduleId
-      });
-    } else {
-      console.log('Start tutorial:', moduleId);
-    }
+    vscode.postMessage({
+      command: 'startTutorial',
+      moduleId: moduleId
+    });
   };
 
   const handleCompleteTutorial = (moduleId: string) => {
-    // @ts-ignore
-    if (typeof acquireVsCodeApi !== 'undefined') {
-      // @ts-ignore
-      const vscode = acquireVsCodeApi();
-      vscode.postMessage({
-        command: 'completeTutorial',
-        moduleId: moduleId
-      });
-    } else {
-      console.log('Complete tutorial:', moduleId);
-    }
+    vscode.postMessage({
+      command: 'completeTutorial',
+      moduleId: moduleId
+    });
   };
 
   // Ayudantes de navegación rápida (Paginación de libro)
@@ -310,12 +297,7 @@ function App() {
                           className="btn" 
                           style={{ padding: '2px 8px', fontSize: '10px' }}
                           onClick={() => {
-                            // @ts-ignore
-                            if (typeof acquireVsCodeApi !== 'undefined') {
-                              // @ts-ignore
-                              const vscode = acquireVsCodeApi();
-                              vscode.postMessage({ command: 'copy', text: engine.connectionCommand });
-                            }
+                            vscode.postMessage({ command: 'copy', text: engine.connectionCommand });
                           }}
                         >
                           Copiar Comando
