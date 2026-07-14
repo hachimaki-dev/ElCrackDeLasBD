@@ -7,24 +7,23 @@ interface SettingsProps {
 export const HomeSettings: React.FC<SettingsProps> = ({ onExecuteCommand }) => {
   return (
     <div>
-      <div className="section-header">
-        <h2 className="section-title">Ajustes y Diagnósticos</h2>
-        <p className="section-desc">
-          Configura las contraseñas de las bases de datos o realiza análisis de diagnóstico para verificar el estado de Docker.
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '6px' }}>Ajustes y Diagnósticos</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', margin: 0 }}>
+          Configura las credenciales maestras y realiza pruebas de diagnóstico de la infraestructura Docker.
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '600px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '600px' }}>
         
         {/* Password settings */}
-        <div className="widget-card">
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 600 }}>Contraseña Maestra</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 16px 0', lineHeight: '1.5' }}>
-            Establece la contraseña por defecto que utilizarán los motores de base de datos creados en los contenedores. Por defecto es <code>labpassword</code>.
+        <div className="dashboard-panel">
+          <h3 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: 600 }}>Contraseña Maestra</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+            Establece la contraseña maestra que utilizarán por defecto los motores de base de datos creados en los contenedores.
           </p>
           <button
-            className="btn"
-            style={{ background: 'rgba(14, 165, 233, 0.15)', borderColor: 'rgba(14, 165, 233, 0.3)', color: 'var(--accent-secondary)' }}
+            className="btn primary"
             onClick={() => onExecuteCommand('sqlEngineLab.configureCredentials')}
           >
             🔑 Cambiar Contraseña Maestra
@@ -32,14 +31,13 @@ export const HomeSettings: React.FC<SettingsProps> = ({ onExecuteCommand }) => {
         </div>
 
         {/* Diagnostics Doctor */}
-        <div className="widget-card">
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 600 }}>Doctor de Diagnósticos</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '0 0 16px 0', lineHeight: '1.5' }}>
-            ¿Tienes problemas para conectar los motores con Docker? Ejecuta un chequeo completo de requerimientos, permisos y estados del daemon. El informe se imprimirá en el panel de Salida de VS Code.
+        <div className="dashboard-panel">
+          <h3 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: 600 }}>Doctor de Diagnósticos</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+            ¿Tienes problemas de conectividad con Docker o conflictos de red? Ejecuta un chequeo del socket, permisos y daemon. Los resultados se imprimirán en el canal de Salida de tu editor.
           </p>
           <button
-            className="btn"
-            style={{ background: 'rgba(139, 92, 246, 0.15)', borderColor: 'rgba(139, 92, 246, 0.3)', color: '#a78bfa' }}
+            className="btn accent-purple-btn"
             onClick={() => onExecuteCommand('sqlEngineLab.showDiagnostics')}
           >
             🩺 Ejecutar Diagnóstico de Docker

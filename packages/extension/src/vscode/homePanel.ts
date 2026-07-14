@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { DockerClient } from '../core/docker/dockerClient';
 import { getEngineById, getAllEngines } from '../core/engines/registry';
-import { PullProgress, EngineStatus } from '../core/engines/engine.types';
+import { PullProgress, EngineStatus, EngineState, ConnectionInfo } from '../core/engines/engine.types';
 import { detectPlatform } from '../core/docker/platformInfo';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { ProgressManager } from '../core/progress/progressManager';
@@ -19,6 +21,7 @@ export class HomePanel {
   private currentState: HomeState = 'checking_docker';
   private pullProgress?: PullProgress;
   private isPolling = false;
+  private currentMessage?: string;
   private readonly onReadyCallback?: () => void;
 
   private constructor(
@@ -39,12 +42,21 @@ export class HomePanel {
     this.panel.webview.html = this.buildHtml();
     
     // Escuchar eventos del ciclo de vida para sincronizar la UI en tiempo real
-    const statusListener = () => {
+    const statusListener = (state?: EngineState): void => {
+      if (state && state.message) {
+        this.currentMessage = state.message;
+      }
       this.updateWebviewState();
     };
     this.lifecycle.on('statusChanged', statusListener);
-    this.lifecycle.on('engineStarted', statusListener);
-    this.lifecycle.on('engineStopped', statusListener);
+    this.lifecycle.on('engineStarted', (_info: ConnectionInfo) => {
+      this.currentMessage = undefined;
+      this.updateWebviewState();
+    });
+    this.lifecycle.on('engineStopped', () => {
+      this.currentMessage = undefined;
+      this.updateWebviewState();
+    });
 
     this.panel.onDidDispose(() => {
       HomePanel.currentPanel = undefined;
@@ -111,6 +123,69 @@ export class HomePanel {
 
     HomePanel.currentPanel = new HomePanel(panel, extensionUri, dockerClient, lifecycle, progressManager, onReady);
   }
+
+  static refresh(): void {
+    if (HomePanel.currentPanel) {
+      HomePanel.currentPanel.updateWebviewState();
+    }
+  }
+
+  private loadTutorials(): Record<
+    string,
+    Record<
+      string,
+      { engine: string; level: string; title: string; description: string; content: string }
+    >
+  > | null {
+    let tutorialsData: Record<
+      string,
+      Record<
+        string,
+        { engine: string; level: string; title: string; description: string; content: string }
+      >
+    > | null = null;
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const wsPath = path.join(workspaceFolders[0].uri.fsPath, 'lab-tutorials.json');
+      if (fs.existsSync(wsPath)) {
+        try {
+          tutorialsData = JSON.parse(fs.readFileSync(wsPath, 'utf8')) as Record<
+            string,
+            Record<
+              string,
+              { engine: string; level: string; title: string; description: string; content: string }
+            >
+          >;
+        } catch (err) {
+          console.error('Error reading workspace lab-tutorials', err);
+        }
+      }
+    }
+
+    if (!tutorialsData) {
+      try {
+        let tutorialsPath = path.join(this.extensionUri.fsPath, '..', '..', 'lab-tutorials.json');
+        if (!fs.existsSync(tutorialsPath)) {
+          tutorialsPath = path.join(this.extensionUri.fsPath, 'lab-tutorials.json');
+        }
+        if (fs.existsSync(tutorialsPath)) {
+          tutorialsData = JSON.parse(fs.readFileSync(tutorialsPath, 'utf8')) as Record<
+            string,
+            Record<
+              string,
+              { engine: string; level: string; title: string; description: string; content: string }
+            >
+          >;
+        }
+      } catch (err) {
+        console.error('Error reading extension path lab-tutorials', err);
+      }
+    }
+
+    return tutorialsData;
+  }
+
 
   private async runSetupFlow(): Promise<void> {
     this.lifecycle.emit('diagnosticLog', `[HomePanel] runSetupFlow: Starting setup flow...`);
@@ -221,12 +296,12 @@ export class HomePanel {
     }
   }
 
-  private setState(state: HomeState) {
+  private setState(state: HomeState): void {
     this.currentState = state;
     this.updateWebviewState();
   }
 
-  private updateWebviewState() {
+  private updateWebviewState(): void {
     const enginesList = getAllEngines();
     const activeEngineId = this.lifecycle.getCurrentEngine();
     const activeEngineStatus = this.lifecycle.getStatus();
@@ -237,11 +312,14 @@ export class HomePanel {
       if (activeEngineId === engine.id) {
         status = activeEngineStatus;
       }
+      const progress = this.progressManager.getEngineProgress(engine.id);
       return {
         id: engine.id,
         displayName: engine.displayName,
         status,
         port: engine.defaultPort,
+        completedModules: progress.completedModules || [],
+        xp: progress.xp || { ddl: 0, dml: 0, optimization: 0, architecture: 0 },
       };
     });
 
@@ -292,6 +370,10 @@ export class HomePanel {
       badges: Array.from(badgeMap.values()),
     };
 
+    const activeEngine = activeEngineId ? getEngineById(activeEngineId) : undefined;
+    const tutorialsData = this.loadTutorials();
+    const activeEngineTutorials = (tutorialsData && activeEngine) ? tutorialsData[activeEngine.id] : undefined;
+
     void this.panel.webview.postMessage({
       command: 'updateHomeState',
       state: this.currentState,
@@ -299,7 +381,10 @@ export class HomePanel {
       engines: enginesData,
       activeConnection: activeConnection || undefined,
       progress: gamification,
+      tutorials: activeEngineTutorials || undefined,
+      activeEngineMessage: this.currentMessage,
     });
+
   }
 
   private buildHtml(): string {

@@ -10,6 +10,8 @@ interface EngineData {
   displayName: string;
   status: 'stopped' | 'pulling' | 'starting' | 'running' | 'stopping' | 'error';
   port: number;
+  completedModules?: string[];
+  xp?: { ddl: number; dml: number; optimization: number; architecture: number };
 }
 
 interface ActiveConnection {
@@ -33,6 +35,7 @@ export const HomeApp: React.FC = () => {
   const [progress, setProgress] = useState<{ status: string; percentage?: number }>();
   const [engines, setEngines] = useState<EngineData[]>([]);
   const [activeConnection, setActiveConnection] = useState<ActiveConnection | undefined>(undefined);
+  const [tutorialsData, setTutorialsData] = useState<any>(null);
   const [gamification, setGamification] = useState<Gamification>({
     xp: 0,
     level: 1,
@@ -57,6 +60,11 @@ export const HomeApp: React.FC = () => {
         }
         if (message.progress) {
           setGamification(message.progress);
+        }
+        if (message.tutorials) {
+          setTutorialsData(message.tutorials);
+        } else {
+          setTutorialsData(null);
         }
       }
     };
@@ -97,6 +105,7 @@ export const HomeApp: React.FC = () => {
         engines={engines}
         activeConnection={activeConnection}
         gamification={gamification}
+        tutorialsData={tutorialsData}
         onExecuteCommand={handleExecuteCommand}
       />
     );
