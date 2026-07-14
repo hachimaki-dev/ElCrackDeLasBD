@@ -26,7 +26,7 @@ function Show-Pass($msg) {
 
 function Show-Fail($msg) {
     Write-Host "  [ERROR] $msg" -ForegroundColor Red
-    global: $issues++
+    $global:issues++
 }
 
 function Show-Warn($msg) {
@@ -141,7 +141,6 @@ $requiredDirs = @(
     "packages\docker-image\engines\mysql",
     "packages\docker-image\engines\mariadb",
     "packages\docker-image\engines\sqlite",
-    "packages\docker-image\engines\oracle",
     "packages\docker-image\engines\sqlserver",
     "packages\extension\src\core\engines",
     "packages\extension\src\core\docker",

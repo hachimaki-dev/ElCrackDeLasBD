@@ -212,7 +212,6 @@ required_dirs=(
   "packages/docker-image/engines/mysql"
   "packages/docker-image/engines/mariadb"
   "packages/docker-image/engines/sqlite"
-  "packages/docker-image/engines/oracle"
   "packages/docker-image/engines/sqlserver"
   "packages/extension/src/core/engines"
   "packages/extension/src/core/docker"
