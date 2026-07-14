@@ -15,6 +15,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { EngineId, ConnectionInfo, EngineState } from '../core/engines/engine.types';
 import { getAllEngines, getEngineById, isValidEngineId } from '../core/engines/registry';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
@@ -22,6 +24,9 @@ import { DockerClient } from '../core/docker/dockerClient';
 import { runDoctorFormatted } from '../core/docker/dockerDiagnostics';
 import { EngineTreeViewProvider } from './treeView';
 import { HomePanel } from './homePanel';
+import { ConnectionProfile } from '../core/credentials/vault';
+import { ValidationEngine } from '../core/validation/validationEngine';
+import { SheetManager } from './sheet/sheetManager';
 
 
 /**
@@ -40,6 +45,8 @@ export function registerCommands(
   dockerClient: DockerClient,
   outputChannel: vscode.OutputChannel,
   progressManager: import('../core/progress/progressManager').ProgressManager,
+  validationEngine: ValidationEngine,
+  sheetManager: SheetManager,
 ): vscode.Disposable[] {
   // Guardar la última conexión activa para mostrarla en el panel
   let activeConnectionInfo: ConnectionInfo | undefined;
@@ -201,7 +208,7 @@ export function registerCommands(
 
 
     // ------------------------------------------------------------------
-    // Completar Módulo de Tutorial
+    // Completar Módulo de Tutorial (Manual)
     // ------------------------------------------------------------------
     vscode.commands.registerCommand('sqlEngineLab.completeTutorial', async (moduleId: string) => {
       const currentEngineId = lifecycle.getCurrentEngine();
@@ -214,6 +221,87 @@ export function registerCommands(
       void vscode.window.showInformationMessage(
         `¡Felicidades! Completaste el módulo ${moduleId}.`,
       );
+    }),
+
+    // ------------------------------------------------------------------
+    // Verificar Módulo de Tutorial (Autograder)
+    // ------------------------------------------------------------------
+    vscode.commands.registerCommand('sqlEngineLab.verifyTutorial', async (moduleId: string) => {
+      const currentEngineId = lifecycle.getCurrentEngine();
+      if (!currentEngineId) {
+        void vscode.window.showErrorMessage('No hay ningún motor corriendo.');
+        return;
+      }
+
+      // 1. Obtener la conexión sandbox
+      const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+      const sandboxProfile: ConnectionProfile = {
+        id: `sandbox-${currentEngineId}`, // Importante: prefijo sandbox- para que sheetManager lo detecte
+        name: 'Sandbox',
+        engineId: currentEngineId,
+        user: config.get<string>('labUser', 'labuser'),
+        database: config.get<string>('labDatabase', 'labdb'),
+        password: config.get<string>('labPassword', 'LabPassword123!'),
+      };
+
+      // 2. Cargar las reglas de validación desde lab-tutorials.json
+      let tutorialsData: any = null;
+      try {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        let tutorialsPath = '';
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          tutorialsPath = path.join(workspaceFolders[0].uri.fsPath, 'lab-tutorials.json');
+        }
+        if (!fs.existsSync(tutorialsPath)) {
+          tutorialsPath = path.join(context.extensionPath, '..', '..', 'lab-tutorials.json');
+        }
+        if (!fs.existsSync(tutorialsPath)) {
+          tutorialsPath = path.join(context.extensionPath, 'lab-tutorials.json');
+        }
+
+        if (fs.existsSync(tutorialsPath)) {
+          tutorialsData = JSON.parse(fs.readFileSync(tutorialsPath, 'utf8'));
+        }
+      } catch (err) {
+        console.error('Error loading tutorials for verification:', err);
+      }
+
+      const engineTutorials = tutorialsData ? tutorialsData[currentEngineId] : null;
+      const tutorial = engineTutorials ? engineTutorials[moduleId] : null;
+
+      if (!tutorial) {
+        void vscode.window.showErrorMessage(`No se encontró la definición del tutorial ${moduleId}.`);
+        return;
+      }
+
+      // 3. Obtener el SQL del usuario del sandbox
+      const userSql = sheetManager.getSandboxSheetText() || '';
+
+      // 4. Ejecutar el autograder
+      const rules = (tutorial.validation && tutorial.validation.rules) || [];
+      
+      const report = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `SQL Engine Lab: Verificando Reto ${moduleId}...`,
+          cancellable: false,
+        },
+        async () => {
+          return await validationEngine.validate(currentEngineId, sandboxProfile, rules, userSql);
+        }
+      );
+
+      // 5. Si pasa la validación, marcar como completado
+      if (report.passed) {
+        await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
+        HomePanel.refresh();
+        void vscode.window.showInformationMessage(`¡Excelente! Reto ${moduleId} completado con éxito.`);
+      } else {
+        void vscode.window.showWarningMessage(`Algunas pruebas fallaron para el reto ${moduleId}. Revisa la consola de validación.`);
+      }
+
+      // 6. Transmitir el reporte de validación al Webview
+      HomePanel.sendValidationResult(report);
     }),
 
 

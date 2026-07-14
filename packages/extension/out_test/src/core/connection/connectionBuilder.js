@@ -31,7 +31,9 @@ function buildConnectionCommand(engine, connectionInfo, isAdmin = false) {
     const template = engine.connectionTemplate;
     const user = isAdmin
         ? template.adminUser || template.defaultUser
-        : 'user' in connectionInfo ? connectionInfo.user : template.defaultUser;
+        : 'user' in connectionInfo
+            ? connectionInfo.user
+            : template.defaultUser;
     let password = '';
     if (isAdmin) {
         const isSharedPassword = template.adminPassword === engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;

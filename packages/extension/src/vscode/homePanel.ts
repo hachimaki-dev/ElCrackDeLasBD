@@ -130,11 +130,23 @@ export class HomePanel {
     }
   }
 
+  /**
+   * Envía el reporte de la autocalificación al Webview React activo.
+   */
+  static sendValidationResult(report: any): void {
+    if (HomePanel.currentPanel) {
+      void HomePanel.currentPanel.panel.webview.postMessage({
+        command: 'validationResult',
+        report,
+      });
+    }
+  }
+
   private loadTutorials(): Record<
     string,
     Record<
       string,
-      { engine: string; level: string; title: string; description: string; content: string }
+      { engine: string; level: string; title: string; description: string; content: string; setup?: string; validation?: any }
     >
   > | null {
     let tutorialsData: Record<
@@ -363,11 +375,14 @@ export class HomePanel {
     const level = Math.floor(totalXp / XP_PER_LEVEL) + 1;
     const xpInLevel = totalXp % XP_PER_LEVEL;
 
+    const maxStreak = Math.max(7, ...enginesList.map(e => this.progressManager.getEngineProgress(e.id).streak || 0));
+
     const gamification = {
       xp: totalXp,
       level,
       xpToNextLevel: XP_PER_LEVEL - xpInLevel,
       badges: Array.from(badgeMap.values()),
+      streak: maxStreak,
     };
 
     const activeEngine = activeEngineId ? getEngineById(activeEngineId) : undefined;

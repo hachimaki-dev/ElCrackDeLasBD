@@ -21,6 +21,10 @@ export declare class SheetManager {
      */
     handleDocumentClosed(document: vscode.TextDocument): void;
     /**
+     * Obtiene el contenido de texto de la hoja asociada al sandbox activo.
+     */
+    getSandboxSheetText(): string | undefined;
+    /**
      * Limpia todos los estados.
      */
     dispose(): void;

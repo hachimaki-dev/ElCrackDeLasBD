@@ -29,6 +29,7 @@ interface HomeDashboardProps {
     level: number;
     xpToNextLevel: number;
     badges: any[];
+    streak?: number;
   };
   tutorialsData?: any;
   onExecuteCommand: (action: string, args?: any[]) => void;
@@ -105,10 +106,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   return (
     <div className="hachimaki-dashboard">
       <div className="header-title">
-        <h1>
-          SQL Engine Lab
-          <span>Laboratorio de Motores SQL · Un motor a la vez</span>
-        </h1>
+        <div className="header-left">
+          <h1>
+            SQL Engine Lab
+            <span>Laboratorio de Motores SQL · Un motor a la vez</span>
+          </h1>
+        </div>
         
         <div className="tabs-container">
           <div
@@ -140,6 +143,35 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             onClick={() => setActiveTab('settings')}
           >
             Ajustes
+          </div>
+        </div>
+
+        <div className="header-gamification">
+          <div className="header-stat streak">
+            <span className="stat-icon">🔥</span>
+            <div className="stat-text">
+              <span className="stat-label">Racha</span>
+              <span className="stat-value">{gamification.streak || 7} días</span>
+            </div>
+          </div>
+          
+          <div className="header-stat xp">
+            <span className="stat-icon">🏆</span>
+            <div className="stat-text">
+              <span className="stat-value">{gamification.xp.toLocaleString()}</span>
+              <span className="stat-label">XP</span>
+            </div>
+          </div>
+          
+          <div className="header-level-badge">
+            <div className="level-circle-progress" style={{
+              background: `conic-gradient(var(--accent-purple) ${((1000 - gamification.xpToNextLevel) / 1000) * 360}deg, rgba(255, 255, 255, 0.08) 0deg)`
+            }}>
+              <div className="level-circle-inner">
+                <span className="level-label">NIVEL</span>
+                <span className="level-value">{gamification.level}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

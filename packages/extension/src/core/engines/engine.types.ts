@@ -267,25 +267,32 @@ import * as path from 'path';
 
 /**
  * Contrato maestro (Bóveda de la Verdad).
- * Resolvemos la ruta considerando que el archivo compilado estará en out/core/engines/engine.types.js
- * out -> extension -> packages -> root (4 niveles desde out, 5 niveles desde out/core/engines)
+ * Busca el archivo 'lab-contract.json' subiendo por los directorios de forma resiliente.
  */
-const contractPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+function findContractPath(): string {
+  let currentDir = __dirname;
+  while (true) {
+    const checkPath = path.join(currentDir, 'lab-contract.json');
+    if (fs.existsSync(checkPath)) {
+      return checkPath;
+    }
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+  // Fallback si no lo encuentra (lanzará el error esperado al leerlo)
+  return path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
+}
+
+const contractPath = findContractPath();
 let contractData: any;
 try {
   contractData = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
 } catch (e) {
-  // Fallback si corre desde un entorno donde __dirname es diferente (ej. webpack, ts-node)
-  // Intentamos buscarlo asumiendo que estamos en packages/extension/src/core/engines
-  const fallbackPath = path.resolve(__dirname, '..', '..', '..', '..', '..', 'lab-contract.json');
-  try {
-    contractData = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
-  } catch (e2) {
-    // Ultimo intento: buscarlo a un nivel superior si por casualidad estamos en root
-    contractData = JSON.parse(
-      fs.readFileSync(path.resolve(__dirname, 'lab-contract.json'), 'utf8'),
-    );
-  }
+  // En caso extremo, lanzar error más claro
+  throw new Error(`No se pudo leer lab-contract.json en la ruta: ${contractPath}`);
 }
 
 export const LAB_CONTRACT = contractData;

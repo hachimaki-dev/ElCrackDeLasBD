@@ -33,11 +33,21 @@ export type ProgressCallback = (progress: PullProgress) => void;
 export declare class DockerClient {
     private readonly docker;
     constructor(dockerodeInstance?: Dockerode);
+    private getWindowsDockerPaths;
+    private getMacDockerPaths;
     /**
-     * Verifica que Docker esté corriendo y accesible.
-     *
-     * @returns Result vacío si Docker está disponible, o error DOCKER_NOT_RUNNING
+     * Verifica si Docker está instalado en el sistema usando el CLI.
+     * Si no está en el PATH, intenta buscar en las rutas por defecto según el SO.
+     * @param osPlatform - Plataforma actual (darwin, win32, linux)
+     * @returns true si el comando docker existe o está en ruta por defecto, false si no.
      */
+    isDockerInstalled(osPlatform?: string): Promise<boolean>;
+    /**
+     * Intenta levantar Docker Desktop de forma automática según el SO.
+     * @param os El sistema operativo detectado (darwin, win32, linux)
+     * @returns true si se lanzó el comando sin error.
+     */
+    startDockerDesktop(os: string): Promise<boolean>;
     checkDockerAvailability(): Promise<Result<void>>;
     /**
      * Descarga una imagen de Docker Hub con reporte de progreso.

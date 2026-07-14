@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { getEnrichedContent } from '../data/enrichedTutorials';
 
 interface TutorialModule {
   id: string;
   title: string;
   description: string;
   content?: string;
+  learning_objective?: string;
+  prerequisites?: string;
+  concept?: string;
+  hints?: string[];
+  solution?: string;
+  expected_output?: string;
+  common_pitfalls?: string[];
+  real_world_purpose?: string;
 }
 
 interface TutorialLevel {
@@ -27,12 +34,83 @@ interface HomeTutorialsProps {
   onExecuteCommand: (action: string, args?: any[]) => void;
 }
 
+interface RecentActivityEvent {
+  id: string;
+  message: string;
+  xp?: string;
+  time: string;
+}
+
 export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
   activeEngine,
   tutorialsData,
   onExecuteCommand,
 }) => {
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'content' | 'example' | 'deepdive' | 'notes' | 'resources'>('content');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [validationReport, setValidationReport] = useState<any>(null);
+  const [revealedSolution, setRevealedSolution] = useState(false);
+  const [activeHintIndex, setActiveHintIndex] = useState<number>(-1);
+  const [bookmarkedChapters, setBookmarkedChapters] = useState<string[]>([]);
+  
+  // Actividad Reciente Dinámica
+  const [activities, setActivities] = useState<RecentActivityEvent[]>([
+    { id: '1', message: 'Completaste: 1-0 Introducción a los Datos', xp: '+50 XP', time: 'Hace 2 días' },
+    { id: '2', message: 'Te conectaste al motor actual', time: 'Hace 23 horas' },
+    { id: '3', message: 'Abriste el Sandbox de Prácticas', time: 'Hace 1 día' }
+  ]);
+
+  // Consejos del DBA
+  const dbaTips = [
+    "Usa bind variables en tus consultas para mejorar rendimiento y seguridad contra inyección SQL.",
+    "Nunca ejecutes un UPDATE o DELETE sin WHERE en bases de datos de producción. Usa transacciones explícitas.",
+    "El índice B-Tree es ideal para búsquedas de igualdad y rangos, pero inútil para búsquedas LIKE con comodines al inicio ('%patrón%').",
+    "Monitorea constantemente la fragmentación de tus índices en tablas de alta transaccionalidad.",
+    "Configura siempre alertas de espacio en disco; un llenado repentino del WAL puede paralizar tu motor.",
+    "Las restricciones CHECK y UNIQUE directas en la base de datos son la única garantía real de consistencia de datos."
+  ];
+  const [currentTip, setCurrentTip] = useState(dbaTips[0]);
+
+  // Rotar el consejo del día
+  useEffect(() => {
+    const randomTip = dbaTips[Math.floor(Math.random() * dbaTips.length)];
+    setCurrentTip(randomTip);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModuleId]);
+
+  // Limpiar reportes al cambiar de lección
+  useEffect(() => {
+    setValidationReport(null);
+    setIsVerifying(false);
+    setRevealedSolution(false);
+    setActiveHintIndex(-1);
+    setActiveSubTab('content');
+  }, [activeModuleId]);
+
+  // Escuchar reportes de verificación de la extensión
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message.command === 'validationResult') {
+        setIsVerifying(false);
+        setValidationReport(message.report);
+
+        // Añadir a actividad reciente
+        const newEvent: RecentActivityEvent = {
+          id: Date.now().toString(),
+          message: message.report.passed 
+            ? `Superaste el Desafío: ${activeModuleId}` 
+            : `Fallo en Desafío: ${activeModuleId}`,
+          xp: message.report.passed ? '+150 XP' : undefined,
+          time: 'Ahora mismo'
+        };
+        setActivities(prev => [newEvent, ...prev.slice(0, 4)]);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [activeModuleId]);
 
   // Default backup mock content if the extension fails to read the JSON file
   const fallbackMockTutorials: TutorialLevel[] = [
@@ -68,10 +146,11 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
   const levelsConfig = [
     { id: 'nivel-1', title: 'Nivel 1: Fundamentos', modulePrefix: '1-' },
     { id: 'nivel-2', title: 'Nivel 2: Consultas Avanzadas', modulePrefix: '2-' },
-    { id: 'nivel-3', title: 'Nivel 3: Experto', modulePrefix: '3-' }
+    { id: 'nivel-3', title: 'Nivel 3: Experto', modulePrefix: '3-' },
+    { id: 'nivel-4', title: 'Nivel 4: Transacciones y Automatización', modulePrefix: '4-' }
   ];
 
-  // Resolve tutorial categories
+  // Resolve tutorial categories using all fields (spread operator)
   const activeTutorials: TutorialLevel[] = levelsConfig.map(lvl => {
     if (tutorialsData) {
       const modules = Object.keys(tutorialsData)
@@ -79,9 +158,7 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
         .sort()
         .map(key => ({
           id: key,
-          title: tutorialsData[key].title,
-          description: tutorialsData[key].description,
-          content: tutorialsData[key].content
+          ...tutorialsData[key]
         }));
       
       if (modules.length > 0) {
@@ -131,12 +208,29 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
 
   const handleStartTutorial = (moduleId: string) => {
     onExecuteCommand('sqlEngineLab.startTutorial', [moduleId]); // Resolved by extension
-    // Focus or trigger sandbox workspace opening
     onExecuteCommand('sqlEngineLab.newSqlSheet');
+
+    // Añadir actividad
+    const newEvent: RecentActivityEvent = {
+      id: Date.now().toString(),
+      message: `Abriste Sandbox de Lección: ${moduleId}`,
+      time: 'Ahora mismo'
+    };
+    setActivities(prev => [newEvent, ...prev.slice(0, 4)]);
   };
 
   const handleCompleteTutorial = (moduleId: string) => {
-    onExecuteCommand('sqlEngineLab.completeTutorial', [moduleId]);
+    setIsVerifying(true);
+    setValidationReport(null);
+    onExecuteCommand('sqlEngineLab.verifyTutorial', [moduleId]);
+  };
+
+  const toggleBookmark = (moduleId: string) => {
+    if (bookmarkedChapters.includes(moduleId)) {
+      setBookmarkedChapters(prev => prev.filter(id => id !== moduleId));
+    } else {
+      setBookmarkedChapters(prev => [...prev, moduleId]);
+    }
   };
 
   const hasPreviousChapter = () => {
@@ -167,9 +261,54 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
     }
   };
 
-  const enriched = activeModuleId && activeEngine 
-    ? getEnrichedContent(activeEngine.id, activeModuleId) 
-    : null;
+  // Metadatos de Dificultad, XP, Tiempos
+  const getDifficulty = (moduleId: string): 'Básico' | 'Intermedio' | 'Avanzado' => {
+    if (moduleId.startsWith('1-')) return 'Básico';
+    if (moduleId.startsWith('2-')) return 'Intermedio';
+    return 'Avanzado';
+  };
+
+  const getEstimatedTime = (moduleId: string): string => {
+    if (moduleId.startsWith('1-')) return '10 min';
+    if (moduleId.startsWith('2-')) return '15 min';
+    return '25 min';
+  };
+
+  const getXpReward = (moduleId: string): string => {
+    if (moduleId === '1-1' || moduleId === '1-2') return '150 XP';
+    if (moduleId === '1-3') return '200 XP';
+    if (moduleId === '2-1') return '250 XP';
+    if (moduleId === '2-2') return '300 XP';
+    if (moduleId === '2-3') return '350 XP';
+    if (moduleId === '3-1') return '400 XP';
+    return '450 XP';
+  };
+
+  const getPrerequisiteName = (moduleId: string): string => {
+    if (moduleId === '1-1') return 'Ninguno';
+    const idx = flatModuleOrder.indexOf(moduleId);
+    if (idx <= 0) return 'Ninguno';
+    return `Capítulo ${flatModuleOrder[idx - 1]}`;
+  };
+
+  // Cálculo de progreso de logros para el Right Sidebar
+  const getDdlProgress = () => {
+    const ddlModules = flatModuleOrder.filter(id => id.startsWith('1-1') || id.startsWith('1-2'));
+    const completed = ddlModules.filter(id => isModuleCompleted(id)).length;
+    return { completed, total: ddlModules.length, pct: ddlModules.length > 0 ? (completed / ddlModules.length) * 100 : 0 };
+  };
+
+  const getDmlProgress = () => {
+    const dmlModules = flatModuleOrder.filter(id => id.startsWith('1-3') || id.startsWith('2-1') || id.startsWith('4-1'));
+    const completed = dmlModules.filter(id => isModuleCompleted(id)).length;
+    return { completed, total: dmlModules.length, pct: dmlModules.length > 0 ? (completed / dmlModules.length) * 100 : 0 };
+  };
+
+  const getLevel1Progress = () => {
+    const lvl1Modules = flatModuleOrder.filter(id => id.startsWith('1-'));
+    const completed = lvl1Modules.filter(id => isModuleCompleted(id)).length;
+    return { completed, total: lvl1Modules.length, pct: lvl1Modules.length > 0 ? (completed / lvl1Modules.length) * 100 : 0 };
+  };
 
   if (!activeEngine) {
     return (
@@ -181,9 +320,13 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
     );
   }
 
+  const ddlProg = getDdlProgress();
+  const dmlProg = getDmlProgress();
+  const lvl1Prog = getLevel1Progress();
+
   return (
     <div className="book-container">
-      {/* Sidebar - TOC */}
+      {/* 1. COLUMNA IZQUIERDA: TEMARIO */}
       <div className="book-sidebar">
         <div className="sidebar-progress-container">
           <div className="sidebar-progress-text">
@@ -197,6 +340,8 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
             ></div>
           </div>
         </div>
+
+        <div className="sidebar-menu-title">RUTA DE APRENDIZAJE</div>
 
         <div className="sidebar-menu">
           {activeTutorials.map(level => (
@@ -230,150 +375,344 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
             </div>
           ))}
         </div>
+
+        {/* Widget de Misiones Diarias */}
+        <div className="sidebar-daily-missions">
+          <div className="mission-header">
+            <span className="mission-icon">🎯</span>
+            <span className="mission-title">Misiones Diarias</span>
+          </div>
+          <div className="mission-item">
+            <div className="mission-info">
+              <span className="mission-desc">Resuelve 2 retos de DML</span>
+              <span className="mission-xp">+150 XP</span>
+            </div>
+            <div className="mission-progress-bar-bg">
+              <div className="mission-progress-bar-fill" style={{ width: dmlProg.completed >= 2 ? '100%' : dmlProg.completed === 1 ? '50%' : '0%' }}></div>
+            </div>
+            <span className="mission-progress-text">{Math.min(2, dmlProg.completed)}/2 completadas</span>
+          </div>
+        </div>
       </div>
 
-      {/* Reader Body */}
+      {/* 2. COLUMNA CENTRAL: LECTOR Y TABS */}
       <div className="book-reader">
         {activeModule ? (
           <>
             <div className="reader-body">
               <div className="reader-content-limit">
-                <div className="reader-path-badge">
-                  {activeEngine.displayName} /{' '}
-                  {activeModule.id.startsWith('1-') 
-                    ? 'Nivel 1: Fundamentos' 
-                    : activeModule.id.startsWith('2-') 
-                      ? 'Nivel 2: Intermedio' 
-                      : 'Nivel 3: Experto'}
+                
+                {/* Header Contexto y Botones de Opciones */}
+                <div className="reader-header-actions">
+                  <div className="reader-path-badge">
+                    {activeEngine.displayName} /{' '}
+                    {activeModule.id.startsWith('1-') 
+                      ? 'Nivel 1: Fundamentos' 
+                      : activeModule.id.startsWith('2-') 
+                        ? 'Nivel 2: Intermedio' 
+                        : 'Nivel 3: Experto'}
+                  </div>
+                  <div className="reader-option-buttons">
+                    <button 
+                      className={`btn-icon ${bookmarkedChapters.includes(activeModule.id) ? 'active' : ''}`}
+                      onClick={() => toggleBookmark(activeModule.id)}
+                      title="Marcar Lección"
+                    >
+                      🔖
+                    </button>
+                    <button className="btn-icon" title="Compartir">📤</button>
+                    <button className="btn-icon" title="Más opciones">•••</button>
+                  </div>
                 </div>
 
+                {/* Título */}
                 <div className="reader-title-container">
                   <h2>Capítulo {activeModule.id}: {activeModule.title}</h2>
                 </div>
 
-                <p className="reader-description">{activeModule.description}</p>
+                {/* Engine Intro (Lore del Caso Real) */}
+                {tutorialsData && tutorialsData.engine_intro && (
+                  <div className="engine-intro-card">
+                    <div className="intro-header">
+                      <span className="intro-badge">🏢 CASO REAL DE LA INDUSTRIA</span>
+                    </div>
+                    <p className="intro-text">{tutorialsData.engine_intro}</p>
+                  </div>
+                )}
 
-                {/* Actions Card */}
+                {/* Fila de Metadatos del Capítulo */}
+                <div className="chapter-meta-grid">
+                  <div className="meta-card">
+                    <span className="meta-label">DIFICULTAD</span>
+                    <span className="meta-value text-green">{getDifficulty(activeModule.id)}</span>
+                  </div>
+                  <div className="meta-card">
+                    <span className="meta-label">TIEMPO ESTIMADO</span>
+                    <span className="meta-value">{getEstimatedTime(activeModule.id)}</span>
+                  </div>
+                  <div className="meta-card">
+                    <span className="meta-label">RECOMPENSA</span>
+                    <span className="meta-value text-purple">{getXpReward(activeModule.id)}</span>
+                  </div>
+                  <div className="meta-card">
+                    <span className="meta-label">PRERREQUISITO</span>
+                    <span className="meta-value">{getPrerequisiteName(activeModule.id)}</span>
+                  </div>
+                </div>
+
+                {/* Sandbox Desafío Banner */}
                 <div className={`reader-actions-card ${isModuleCompleted(activeModule.id) ? 'completed' : ''}`}>
                   <div className="reader-actions-info">
                     <span className="reader-actions-title">
-                      {isModuleCompleted(activeModule.id) ? '✓ Capítulo Completado' : '▶ Desafío en Sandbox'}
+                      {isModuleCompleted(activeModule.id) ? '✓ Capítulo Completado' : '⚡ Desafío en Sandbox'}
                     </span>
                     <span className="reader-actions-desc">
                       {!isModulePrerequisitesMet(activeModule.id) && !isModuleCompleted(activeModule.id)
                         ? '🔒 Completa los capítulos anteriores para desbloquear este reto.'
                         : isModuleCompleted(activeModule.id) 
-                          ? 'Ya has resuelto este desafío. Puedes seguir repasando los conceptos.'
-                          : 'Abre el Sandbox para interactuar con la base de datos y resolver el reto.'}
+                          ? 'Ya has resuelto este desafío correctamente. Puedes seguir repasando.'
+                          : 'Abre la hoja SQL en el editor para resolver el reto propuesto.'}
                     </span>
                   </div>
 
                   <div className="reader-actions-buttons">
-                    {isModulePrerequisitesMet(activeModule.id) && !isModuleCompleted(activeModule.id) && (
+                    {isModulePrerequisitesMet(activeModule.id) && (
                       <>
                         <button 
                           className="btn primary"
                           onClick={() => handleStartTutorial(activeModule.id)}
+                          disabled={isVerifying}
                         >
-                          🚀 Abrir Sandbox
+                          💻 {isModuleCompleted(activeModule.id) ? 'Reabrir Sandbox' : 'Abrir Sandbox'}
                         </button>
-                        <button 
-                          className="btn success"
-                          onClick={() => handleCompleteTutorial(activeModule.id)}
-                        >
-                          ✓ Marcar como Listo
-                        </button>
+                        {!isModuleCompleted(activeModule.id) && (
+                          <button 
+                            className="btn success"
+                            onClick={() => handleCompleteTutorial(activeModule.id)}
+                            disabled={isVerifying}
+                          >
+                            {isVerifying ? 'Verificando...' : '🚀 Verificar Desafío'}
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* Theory Content */}
-                <div className="book-chapter-theory">
-                  {activeModule.content ? (
-                    <div dangerouslySetInnerHTML={{ __html: activeModule.content }} />
-                  ) : (
-                    <div>
-                      <p>
-                        En este capítulo analizaremos las estructuras fundamentales necesarias para el diseño de bases de datos. 
-                        Aprenderás la sintaxis estándar y las variaciones de rendimiento propias de este motor SQL.
-                      </p>
-                      {enriched?.lore_context && (
-                        <p style={{ fontStyle: 'italic', color: 'var(--accent-purple)', padding: '10px 0' }}>
-                          {enriched.lore_context}
-                        </p>
-                      )}
-                      {enriched?.visual_analogy && (
-                        <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderLeft: '3px solid var(--accent)', borderRadius: '4px', margin: '16px 0' }}>
-                          <strong>Analogía Visual:</strong> {enriched.visual_analogy}
-                        </div>
-                      )}
-                      {enriched?.technical_deep_dive && (
-                        <div style={{ marginTop: '16px' }}>
-                          <h4>Deep Dive Técnico</h4>
-                          <p>{enriched.technical_deep_dive}</p>
-                        </div>
-                      )}
+                {/* Consola Autograder */}
+                {isVerifying && (
+                  <div className="autograder-console checking">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span className="spinner"></span>
+                      <strong style={{ color: 'var(--accent-cyan)' }}>Analizando la estructura física del motor...</strong>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Enriched Cards Section */}
-                {enriched && (
-                  <div>
-                    <span className="enriched-section-title">Información de Campo</span>
-                    <div className="enriched-grid">
-                      {enriched.consejos?.map((c, i) => (
-                        <div key={`c-${i}`} className="enriched-card consejo">
-                          <div className="enriched-card-header">
-                            <span className="enriched-card-label">💡 Consejo</span>
-                          </div>
-                          <div className="enriched-card-body">{c}</div>
-                        </div>
-                      ))}
-                      
-                      {enriched.ideas?.map((c, i) => (
-                        <div key={`id-${i}`} className="enriched-card idea">
-                          <div className="enriched-card-header">
-                            <span className="enriched-card-label">🧪 Experimento</span>
-                          </div>
-                          <div className="enriched-card-body">{c}</div>
-                        </div>
-                      ))}
-
-                      {enriched.casosDeUso?.map((c, i) => (
-                        <div key={`u-${i}`} className="enriched-card casouso">
-                          <div className="enriched-card-header">
-                            <span className="enriched-card-label">🔧 Caso de Uso</span>
-                          </div>
-                          <div className="enriched-card-body">{c}</div>
-                        </div>
-                      ))}
-
-                      {enriched.casosReales?.map((c, i) => (
-                        <div key={`r-${i}`} className="enriched-card casoreal">
-                          <div className="enriched-card-header">
-                            <span className="enriched-card-label">💥 Lección de Producción</span>
-                          </div>
-                          <div className="enriched-card-body">{c}</div>
-                        </div>
-                      ))}
-
-                      {enriched.noticias?.map((c, i) => (
-                        <div key={`n-${i}`} className="enriched-card noticia">
-                          <div className="enriched-card-header">
-                            <span className="enriched-card-label">📰 Novedades</span>
-                          </div>
-                          <div className="enriched-card-body">{c}</div>
+                {validationReport && (
+                  <div className={`autograder-console ${validationReport.passed ? 'passed' : 'failed'}`}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: validationReport.passed ? 'var(--accent-primary)' : 'var(--accent-danger)' }}>
+                      {validationReport.passed ? '🎉 ¡Desafío Completado con Éxito!' : '❌ Error de Verificación'}
+                    </h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {validationReport.results.map((res: any, idx: number) => (
+                        <div key={idx} className="console-line">
+                          <span className={`console-bullet ${res.passed ? 'passed' : 'failed'}`}>
+                            {res.passed ? '✓ PASÓ:' : '✗ FALLÓ:'}
+                          </span>
+                          <span className="console-msg">{res.message}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* Sub-Navegación de Pestañas de Lección */}
+                <div className="lesson-subtabs">
+                  <div 
+                    className={`subtab ${activeSubTab === 'content' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('content')}
+                  >
+                    Contenido
+                  </div>
+                  <div 
+                    className={`subtab ${activeSubTab === 'example' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('example')}
+                  >
+                    Ejemplo
+                  </div>
+                  <div 
+                    className={`subtab ${activeSubTab === 'deepdive' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('deepdive')}
+                  >
+                    Profundiza
+                  </div>
+                  <div 
+                    className={`subtab ${activeSubTab === 'notes' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('notes')}
+                  >
+                    Notas
+                  </div>
+                  <div 
+                    className={`subtab ${activeSubTab === 'resources' ? 'active' : ''}`}
+                    onClick={() => setActiveSubTab('resources')}
+                  >
+                    Recursos
+                  </div>
+                </div>
+
+                {/* Cuerpo de la Pestaña Activa */}
+                <div className="book-chapter-theory">
+                  {activeSubTab === 'content' && (
+                    <div className="tab-pane-content">
+                      {activeModule.concept && (
+                        <div className="concept-callout">
+                          <h4>El porqué de este capítulo</h4>
+                          <p>{activeModule.concept}</p>
+                        </div>
+                      )}
+                      
+                      {activeModule.learning_objective && (
+                        <div className="objective-box">
+                          <strong>Objetivo de Aprendizaje:</strong> {activeModule.learning_objective}
+                        </div>
+                      )}
+
+                      <h4>Estructura y Teoría</h4>
+                      {activeModule.content ? (
+                        <div className="sql-code-block-wrapper">
+                          <p style={{ marginBottom: '12px' }}>
+                            Esta es la plantilla SQL inicial cargada en tu Sandbox para resolver el reto:
+                          </p>
+                          <pre className="code-block-preview">{activeModule.content}</pre>
+                        </div>
+                      ) : (
+                        <p>No hay código inicial para esta lección.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {activeSubTab === 'example' && (
+                    <div className="tab-pane-content">
+                      <h4>Sintaxis de Referencia y Ejemplo</h4>
+                      <p>
+                        Para resolver esta tarea, la sintaxis SQL recomendada en {activeEngine.displayName} sigue este formato común:
+                      </p>
+                      <pre className="code-block-preview">
+                        {activeModule.solution 
+                          ? `-- Sintaxis típica de uso:\n${activeModule.solution.split('\n')[0]}`
+                          : "SELECT 1;"}
+                      </pre>
+                      <div className="info-box">
+                        <strong>Tip:</strong> Puedes copiar este ejemplo de sintaxis y adaptarlo en tu archivo Sandbox. Escribe comandos correctos y respeta los nombres de las columnas.
+                      </div>
+                    </div>
+                  )}
+
+                  {activeSubTab === 'deepdive' && (
+                    <div className="tab-pane-content">
+                      <h4>Profundización en Ingeniería de Datos</h4>
+                      {activeModule.real_world_purpose && (
+                        <div className="purpose-callout">
+                          <h5>Propósito Profesional (Para qué sirve)</h5>
+                          <p>{activeModule.real_world_purpose}</p>
+                        </div>
+                      )}
+                      
+                      <div style={{ marginTop: '20px' }}>
+                        <h5>Casos Reales y Escala</h5>
+                        <p>
+                          Las empresas globales implementan este patrón a gran escala. Por ejemplo, la fragmentación de índices o el uso erróneo de tipos secuenciales en transacciones financieras de alto tráfico puede causar fallos de desbordamiento de enteros o bloqueos de inserción que detengan la operación.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeSubTab === 'notes' && (
+                    <div className="tab-pane-content">
+                      <h4>Notas del DBA y Errores Comunes</h4>
+                      {activeModule.common_pitfalls && activeModule.common_pitfalls.length > 0 ? (
+                        <div className="pitfalls-list">
+                          {activeModule.common_pitfalls.map((pit, idx) => (
+                            <div key={idx} className="pitfall-item">
+                              <span className="pitfall-warning">⚠️</span>
+                              <div className="pitfall-body">
+                                <strong>Error Común #{idx + 1}:</strong> {pit}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>No se registran pitfalls específicos para este módulo.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {activeSubTab === 'resources' && (
+                    <div className="tab-pane-content">
+                      <h4>Pistas y Solución del Desafío</h4>
+                      
+                      {/* Pistas Progresivas */}
+                      {activeModule.hints && activeModule.hints.length > 0 && (
+                        <div className="hints-section" style={{ marginBottom: '24px' }}>
+                          <h5>💡 Pistas de Resolución Progresivas</h5>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                            {activeModule.hints.map((hint, idx) => (
+                              <div key={idx} className="hint-disclosure">
+                                {activeHintIndex >= idx ? (
+                                  <div className="hint-body">
+                                    <strong>Pista {idx + 1}:</strong> {hint}
+                                  </div>
+                                ) : (
+                                  <button 
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => setActiveHintIndex(idx)}
+                                    style={{ width: 'fit-content' }}
+                                  >
+                                    Revelar Pista {idx + 1}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Solución oculta */}
+                      <div className="solution-revealer" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                        <h5>🔑 Solución de Referencia</h5>
+                        {!revealedSolution ? (
+                          <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>¿Te encuentras atascado en este reto? Puedes revelar la solución para guiarte.</p>
+                            <button 
+                              className="btn btn-sm success"
+                              onClick={() => setRevealedSolution(true)}
+                            >
+                              Revelar Código Solución
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="solution-box" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <pre className="code-block-preview" style={{ borderLeftColor: 'var(--accent-emerald)' }}>
+                              {activeModule.solution || "SELECT 1;"}
+                            </pre>
+                            {activeModule.expected_output && (
+                              <div className="expected-output-box">
+                                <strong>Resultado Esperado:</strong>
+                                <p style={{ fontStyle: 'italic', margin: '4px 0 0 0', color: 'var(--text-muted)' }}>{activeModule.expected_output}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Footer Navigation */}
+            {/* Footer Navegación Paginada */}
             <div className="reader-footer-nav">
               <button 
                 className="reader-footer-nav-btn"
@@ -382,6 +721,9 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
               >
                 ◀ Capítulo Anterior
               </button>
+              <span className="page-indicator">
+                Capítulo {flatModuleOrder.indexOf(activeModule.id) + 1} de {flatModuleOrder.length}
+              </span>
               <button 
                 className="reader-footer-nav-btn"
                 disabled={!hasNextChapter()}
@@ -398,6 +740,111 @@ export const HomeTutorials: React.FC<HomeTutorialsProps> = ({
             <p>Selecciona un capítulo de la barra lateral para empezar a estudiar.</p>
           </div>
         )}
+      </div>
+
+      {/* 3. COLUMNA DERECHA: LOGROS, ÍNDICE Y ACTIVIDAD */}
+      <div className="book-right-sidebar">
+        {activeModule && (
+          <div className="right-sidebar-block">
+            <div className="sidebar-section-title">EN ESTA LECCIÓN</div>
+            <div className="lesson-toc">
+              <div 
+                className={`toc-item ${activeSubTab === 'content' ? 'active' : ''}`}
+                onClick={() => setActiveSubTab('content')}
+              >
+                1. Concepto y Teoría
+              </div>
+              <div 
+                className={`toc-item ${activeSubTab === 'example' ? 'active' : ''}`}
+                onClick={() => setActiveSubTab('example')}
+              >
+                2. Sintaxis y Ejemplo
+              </div>
+              <div 
+                className={`toc-item ${activeSubTab === 'deepdive' ? 'active' : ''}`}
+                onClick={() => setActiveSubTab('deepdive')}
+              >
+                3. Propósito Profesional
+              </div>
+              <div 
+                className={`toc-item ${activeSubTab === 'notes' ? 'active' : ''}`}
+                onClick={() => setActiveSubTab('notes')}
+              >
+                4. Pitfalls y Errores
+              </div>
+              <div 
+                className={`toc-item ${activeSubTab === 'resources' ? 'active' : ''}`}
+                onClick={() => setActiveSubTab('resources')}
+              >
+                5. Soluciones y Pistas
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="right-sidebar-block">
+          <div className="sidebar-section-title">LOGROS RELACIONADOS</div>
+          <div className="achievements-list">
+            <div className="achievement-card-small">
+              <span className="ach-icon">🛡️</span>
+              <div className="ach-info">
+                <span className="ach-name">Tipo Seguro</span>
+                <span className="ach-desc">Domina DDL</span>
+                <div className="ach-progress-bar-bg">
+                  <div className="ach-progress-bar-fill" style={{ width: `${ddlProg.pct}%` }}></div>
+                </div>
+              </div>
+              <span className="ach-reward">+20 XP</span>
+            </div>
+
+            <div className="achievement-card-small">
+              <span className="ach-icon">⚡</span>
+              <div className="ach-info">
+                <span className="ach-name">Precisión</span>
+                <span className="ach-desc">Domina DML</span>
+                <div className="ach-progress-bar-bg">
+                  <div className="ach-progress-bar-fill" style={{ width: `${dmlProg.pct}%` }}></div>
+                </div>
+              </div>
+              <span className="ach-reward">+20 XP</span>
+            </div>
+
+            <div className="achievement-card-small">
+              <span className="ach-icon">🏆</span>
+              <div className="ach-info">
+                <span className="ach-name">Base Sólida</span>
+                <span className="ach-desc">Completa Nivel 1</span>
+                <div className="ach-progress-bar-bg">
+                  <div className="ach-progress-bar-fill" style={{ width: `${lvl1Prog.pct}%` }}></div>
+                </div>
+              </div>
+              <span className="ach-reward">+50 XP</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="right-sidebar-block">
+          <div className="sidebar-section-title">ACTIVIDAD RECIENTE</div>
+          <div className="activities-feed">
+            {activities.map((act) => (
+              <div key={act.id} className="feed-item">
+                <div className="feed-item-header">
+                  <span className="feed-item-msg">{act.message}</span>
+                  {act.xp && <span className="feed-item-xp">{act.xp}</span>}
+                </div>
+                <span className="feed-item-time">{act.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="right-sidebar-block tip-day-block">
+          <div className="sidebar-section-title">CONSEJO DEL DÍA</div>
+          <div className="tip-box-body">
+            <span className="tip-icon">💡</span>
+            <p className="tip-text">{currentTip}</p>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1539,3 +1539,586 @@ kbd {
   font-size: 9.5px;
   color: var(--accent-emerald);
 }
+
+/* ==========================================================================
+   REDISENO PREMIUM DE CABECERA Y TUTORIALES (LOGROS, ESTILO 3 COLUMNAS)
+   ========================================================================== */
+
+/* Gamificación en Cabecera */
+.header-gamification {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+}
+
+.header-stat .stat-icon {
+  font-size: 16px;
+}
+
+.header-stat .stat-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.header-stat .stat-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.header-stat .stat-value {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Badge de Nivel Circular */
+.header-level-badge {
+  display: flex;
+  align-items: center;
+}
+
+.level-circle-progress {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  padding: 3px; /* Espacio para el borde de progreso */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.level-circle-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.level-circle-inner .level-label {
+  font-size: 6.5px;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.level-circle-inner .level-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-purple);
+}
+
+/* Diseño de 3 Columnas para Tutoriales */
+.book-container {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  height: calc(100vh - 65px);
+  overflow: hidden;
+  background-color: var(--bg-main);
+}
+
+.book-sidebar {
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.book-right-sidebar {
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.sidebar-menu-title {
+  padding: 14px 20px 6px 20px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  border-top: 1px solid rgba(255,255,255,0.02);
+}
+
+/* Misiones Diarias en Sidebar Izquierdo */
+.sidebar-daily-missions {
+  margin: auto 12px 12px 12px;
+  background: rgba(139, 92, 246, 0.03);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.sidebar-daily-missions .mission-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sidebar-daily-missions .mission-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sidebar-daily-missions .mission-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-daily-missions .mission-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.sidebar-daily-missions .mission-desc {
+  color: var(--text-main);
+}
+
+.sidebar-daily-missions .mission-xp {
+  color: var(--accent-purple);
+  font-weight: 600;
+}
+
+.sidebar-daily-missions .mission-progress-bar-bg {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.sidebar-daily-missions .mission-progress-bar-fill {
+  height: 100%;
+  background: var(--accent-purple);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.sidebar-daily-missions .mission-progress-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  align-self: flex-end;
+}
+
+/* Header de la Lección del Lector Central */
+.reader-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.reader-option-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: var(--border-hover);
+}
+
+.btn-icon.active {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--accent-purple);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+/* Engine Intro (Lore del Caso Real) */
+.engine-intro-card {
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  margin-bottom: 20px;
+}
+
+.engine-intro-card .intro-header {
+  margin-bottom: 6px;
+}
+
+.engine-intro-card .intro-badge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(0, 122, 204, 0.1);
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.engine-intro-card .intro-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--text-main);
+}
+
+/* Fila de Metadatos del Capítulo */
+.chapter-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.meta-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-card .meta-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.meta-card .meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.meta-value.text-green {
+  color: var(--accent-emerald) !important;
+}
+
+.meta-value.text-purple {
+  color: var(--accent-purple) !important;
+}
+
+/* Sub-Navegación de Pestañas de Lección */
+.lesson-subtabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 18px;
+  gap: 16px;
+}
+
+.subtab {
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: var(--transition-fast);
+}
+
+.subtab:hover {
+  color: var(--text-main);
+}
+
+.subtab.active {
+  color: var(--accent-purple);
+  border-bottom-color: var(--accent-purple);
+  font-weight: 600;
+}
+
+/* Right Sidebar Blocks */
+.right-sidebar-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+}
+
+/* TOC Lateral */
+.lesson-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toc-item {
+  padding: 8px 12px;
+  font-size: 11.5px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.toc-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.toc-item.active {
+  background: rgba(139, 92, 246, 0.06);
+  color: var(--accent-purple);
+  font-weight: 600;
+}
+
+/* Achievements List */
+.achievements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.achievement-card-small {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+.achievement-card-small .ach-icon {
+  font-size: 18px;
+}
+
+.achievement-card-small .ach-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+}
+
+.achievement-card-small .ach-name {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.achievement-card-small .ach-desc {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.achievement-card-small .ach-progress-bar-bg {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+}
+
+.achievement-card-small .ach-progress-bar-fill {
+  height: 100%;
+  background: var(--accent-emerald);
+  border-radius: var(--radius-full);
+}
+
+.achievement-card-small .ach-reward {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-amber);
+}
+
+/* Activities Feed */
+.activities-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255,255,255,0.01);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
+.feed-item-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.feed-item-msg {
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.feed-item-xp {
+  color: var(--accent-emerald);
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.feed-item-time {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* Consejo del Día Block */
+.tip-day-block {
+  margin-top: auto;
+}
+
+.tip-box-body {
+  background: rgba(245, 158, 11, 0.03);
+  border: 1px dashed rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.tip-icon {
+  font-size: 16px;
+}
+
+.tip-text {
+  font-size: 11px;
+  margin: 0;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+
+/* Cajas de llamada y de código */
+.concept-callout {
+  background: rgba(0, 122, 204, 0.03);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.concept-callout h4, .purpose-callout h5 {
+  margin: 0 0 6px 0;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
+.objective-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  font-size: 12px;
+}
+
+.purpose-callout {
+  background: rgba(16, 185, 129, 0.03);
+  border-left: 3px solid var(--accent-emerald);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.purpose-callout h5 {
+  color: var(--accent-emerald) !important;
+}
+
+.pitfalls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pitfall-item {
+  display: flex;
+  gap: 10px;
+  background: rgba(244, 63, 94, 0.02);
+  border: 1px solid rgba(244, 63, 94, 0.1);
+  padding: 12px;
+  border-radius: var(--radius-md);
+}
+
+.pitfall-warning {
+  font-size: 16px;
+}
+
+.pitfall-body {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hint-disclosure {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.hint-body {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.code-block-preview {
+  margin: 8px 0;
+  padding: 12px;
+  background: var(--bg-code);
+  border-left: 3px solid var(--accent-purple);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-main);
+  overflow-x: auto;
+}
+
+/* Responsividad para pantallas medianas/pequeñas */
+@media (max-width: 1000px) {
+  .book-container {
+    grid-template-columns: 200px 1fr !important;
+  }
+  .book-right-sidebar {
+    display: none !important; /* Ocultar sidebar derecho en pantallas más pequeñas */
+  }
+}

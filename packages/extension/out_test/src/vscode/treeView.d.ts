@@ -33,8 +33,10 @@ export declare class EngineTreeViewProvider implements vscode.TreeDataProvider<E
     readonly onDidChangeTreeData: vscode.Event<EngineTreeItem | undefined>;
     /** Estado de cada motor en el árbol */
     private readonly engineStatuses;
+    private isReady;
     constructor(lifecycle: ContainerLifecycle);
     getTreeItem(element: EngineTreeItem): vscode.TreeItem;
+    setIsReady(isReady: boolean): void;
     getChildren(): EngineTreeItem[];
     /**
      * Fuerza un refresh completo del Tree View.

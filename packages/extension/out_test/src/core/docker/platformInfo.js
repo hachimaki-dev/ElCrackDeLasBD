@@ -36,9 +36,7 @@ const OS_DISPLAY_NAMES = {
  * tiene soporte arm64 nativo — NO está en esta lista.
  * Solo SQL Server queda aquí porque Microsoft no publica imagen arm64.
  */
-const AMD64_ONLY_ENGINES = new Set([
-    'sqlserver',
-]);
+const AMD64_ONLY_ENGINES = new Set(['sqlserver']);
 /**
  * Notas para motores que corren nativos en arm64 pero con consideraciones especiales.
  */
@@ -93,7 +91,8 @@ function getEmulationWarning(engineId, platform) {
         return null; // En x86_64 todos corren nativos
     }
     if (AMD64_ONLY_ENGINES.has(engineId)) {
-        return EMULATION_WARNINGS[engineId] ?? `${engineId} correrá bajo emulación en ${platform.displayString}.`;
+        return (EMULATION_WARNINGS[engineId] ??
+            `${engineId} correrá bajo emulación en ${platform.displayString}.`);
     }
     return null;
 }

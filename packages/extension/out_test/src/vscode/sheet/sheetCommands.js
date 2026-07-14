@@ -133,10 +133,13 @@ function registerSheetCommands(context, sheetManager, vault, runner, lifecycle) 
                 // Recuperar la contraseña del Vault
                 const vaultPassword = await vault.getPassword(profile.id);
                 // Creamos una copia del perfil con el password inyectado para la ejecución
-                const execProfile = { ...profile, password: vaultPassword || profile.password };
+                const execProfile = {
+                    ...profile,
+                    password: vaultPassword || profile.password,
+                };
                 const result = await runner.runQuery(execProfile, textToRun);
                 if (result.ok) {
-                    showSqlResult(textToRun, result.value, resultPanel, (p) => resultPanel = p);
+                    showSqlResult(textToRun, result.value, resultPanel, (p) => (resultPanel = p));
                 }
                 else {
                     void vscode.window.showErrorMessage(`Error ejecutando SQL: ${result.error.message}`);
@@ -163,7 +166,7 @@ function registerSheetCommands(context, sheetManager, vault, runner, lifecycle) 
                         tutorialsData = JSON.parse(fs.readFileSync(wsPath, 'utf8'));
                     }
                     catch (e) {
-                        console.error("Error reading workspace lab-tutorials", e);
+                        console.error('Error reading workspace lab-tutorials', e);
                     }
                 }
             }
@@ -171,7 +174,7 @@ function registerSheetCommands(context, sheetManager, vault, runner, lifecycle) 
             if (!tutorialsData) {
                 try {
                     // Si estamos en desarrollo, context.extensionPath es /packages/extension
-                    // Si empaquetamos lab-tutorials, deberíamos moverlo a resources/ o similar, 
+                    // Si empaquetamos lab-tutorials, deberíamos moverlo a resources/ o similar,
                     // pero por ahora buscamos 2 niveles arriba.
                     let tutorialsPath = path.join(context.extensionPath, '..', '..', 'lab-tutorials.json');
                     if (!fs.existsSync(tutorialsPath)) {
@@ -211,9 +214,22 @@ function registerSheetCommands(context, sheetManager, vault, runner, lifecycle) 
                 engineId: currentEngineId,
                 user: config.get('labUser', 'labuser'),
                 database: config.get('labDatabase', 'labdb'),
-                password: config.get('labPassword', 'LabPassword123!')
+                password: config.get('labPassword', 'LabPassword123!'),
             };
             sheetManager.bindSheetToConnection(document.uri, sandboxProfile);
+            // 3. Ejecutar script de setup de base de datos si está definido
+            if (tutorial.setup && tutorial.setup.trim()) {
+                try {
+                    const setupResult = await runner.runQuery(sandboxProfile, tutorial.setup);
+                    if (!setupResult.ok) {
+                        console.error('Error in tutorial setup SQL execution:', setupResult.error.message);
+                        void vscode.window.showWarningMessage(`Advertencia al preparar la base de datos (setup): ${setupResult.error.message}`);
+                    }
+                }
+                catch (e) {
+                    console.error('Exception in tutorial setup:', e);
+                }
+            }
             vscode.window.showInformationMessage(`Tutorial '${tutorial.title}' abierto y conectado al Sandbox.`);
         }),
     ];
@@ -226,8 +242,16 @@ async function configureConnectionForSheet(uri, engineId, vault, sheetManager) {
     const engineDef = (0, registry_1.getEngineById)(engineId);
     const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
     const options = [
-        { label: '$(beaker) Sandbox Efímero', description: 'Usa el usuario estándar del lab. No guarda credenciales.', id: 'sandbox' },
-        { label: '$(add) Nueva Conexión Guardada...', description: 'Crea un perfil con credenciales propias para este motor.', id: 'new' }
+        {
+            label: '$(beaker) Sandbox Efímero',
+            description: 'Usa el usuario estándar del lab. No guarda credenciales.',
+            id: 'sandbox',
+        },
+        {
+            label: '$(add) Nueva Conexión Guardada...',
+            description: 'Crea un perfil con credenciales propias para este motor.',
+            id: 'new',
+        },
     ];
     // Agregar perfiles guardados compatibles con este motor
     const savedProfiles = vault.getProfiles().filter((p) => p.engineId === engineId);
@@ -236,7 +260,7 @@ async function configureConnectionForSheet(uri, engineId, vault, sheetManager) {
     }
     const selected = await vscode.window.showQuickPick(options, {
         title: `Conexión SQL para hoja (Motor: ${engineDef?.displayName})`,
-        placeHolder: 'Selecciona cómo conectarte al motor'
+        placeHolder: 'Selecciona cómo conectarte al motor',
     });
     if (!selected)
         return undefined;
@@ -248,17 +272,22 @@ async function configureConnectionForSheet(uri, engineId, vault, sheetManager) {
             engineId,
             user: config.get('labUser', 'labuser'),
             database: config.get('labDatabase', 'labdb'),
-            password: config.get('labPassword', 'LabPassword123!')
+            password: config.get('labPassword', 'LabPassword123!'),
         };
     }
     else if (selected.id === 'new') {
-        const pName = await vscode.window.showInputBox({ prompt: 'Nombre para este perfil (Ej: Mi Oracle Admin)' });
+        const pName = await vscode.window.showInputBox({
+            prompt: 'Nombre para este perfil (Ej: Mi Oracle Admin)',
+        });
         if (!pName)
             return undefined;
         const pUser = await vscode.window.showInputBox({ prompt: 'Usuario de la Base de Datos' });
         if (!pUser)
             return undefined;
-        const pPass = await vscode.window.showInputBox({ prompt: 'Contraseña (se guardará de forma segura)', password: true });
+        const pPass = await vscode.window.showInputBox({
+            prompt: 'Contraseña (se guardará de forma segura)',
+            password: true,
+        });
         const pDb = await vscode.window.showInputBox({ prompt: 'Nombre de Base de Datos (Opcional)' });
         const newId = `profile-${Date.now()}`;
         profile = {
@@ -266,14 +295,14 @@ async function configureConnectionForSheet(uri, engineId, vault, sheetManager) {
             name: pName,
             engineId,
             user: pUser,
-            database: pDb || undefined
+            database: pDb || undefined,
         };
         await vault.saveProfile(profile, pPass);
         vscode.window.showInformationMessage(`Perfil '${pName}' guardado exitosamente.`);
     }
     else {
         // Perfil existente
-        profile = savedProfiles.find(p => p.id === selected.id);
+        profile = savedProfiles.find((p) => p.id === selected.id);
     }
     sheetManager.bindSheetToConnection(uri, profile);
     vscode.window.showInformationMessage(`Hoja conectada como: ${profile.name} (${profile.user})`);
@@ -302,7 +331,7 @@ function showSqlResult(query, resultText, existingPanel, setPanel) {
         command: 'newResult',
         query: query,
         resultText: resultText || 'Query ejecutada correctamente sin salida tabular.',
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: new Date().toLocaleTimeString(),
     });
 }
 /**

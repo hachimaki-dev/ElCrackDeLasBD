@@ -232,6 +232,22 @@ export function registerSheetCommands(
         password: config.get<string>('labPassword', 'LabPassword123!'),
       };
       sheetManager.bindSheetToConnection(document.uri, sandboxProfile);
+
+      // 3. Ejecutar script de setup de base de datos si está definido
+      if (tutorial.setup && tutorial.setup.trim()) {
+        try {
+          const setupResult = await runner.runQuery(sandboxProfile, tutorial.setup);
+          if (!setupResult.ok) {
+            console.error('Error in tutorial setup SQL execution:', setupResult.error.message);
+            void vscode.window.showWarningMessage(
+              `Advertencia al preparar la base de datos (setup): ${setupResult.error.message}`
+            );
+          }
+        } catch (e: any) {
+          console.error('Exception in tutorial setup:', e);
+        }
+      }
+
       vscode.window.showInformationMessage(
         `Tutorial '${tutorial.title}' abierto y conectado al Sandbox.`,
       );

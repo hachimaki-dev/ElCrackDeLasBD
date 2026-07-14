@@ -50,9 +50,11 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCommands = registerCommands;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 const registry_1 = require("../core/engines/registry");
 const dockerDiagnostics_1 = require("../core/docker/dockerDiagnostics");
-const connectionPanel_1 = require("./connectionPanel");
+const homePanel_1 = require("./homePanel");
 /**
  * Registra todos los comandos de la extensión en el contexto de VS Code.
  * Retorna un array de Disposables para cleanup al desactivar la extensión.
@@ -62,7 +64,7 @@ const connectionPanel_1 = require("./connectionPanel");
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager) {
+function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager) {
     // Guardar la última conexión activa para mostrarla en el panel
     let activeConnectionInfo;
     // Escuchar cuando un motor arranca para guardar la info de conexión
@@ -71,9 +73,17 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
     });
     lifecycle.on('engineStopped', () => {
         activeConnectionInfo = undefined;
-        connectionPanel_1.ConnectionPanel.dispose();
+        homePanel_1.HomePanel.refresh();
     });
     const disposables = [
+        // ------------------------------------------------------------------
+        // Mostrar Home / Setup (Flujo 0)
+        // ------------------------------------------------------------------
+        vscode.commands.registerCommand('sqlEngineLab.showHome', () => {
+            homePanel_1.HomePanel.createOrShow(context.extensionUri, dockerClient, lifecycle, progressManager, () => {
+                treeProvider.setIsReady(true);
+            });
+        }),
         // ------------------------------------------------------------------
         // Iniciar motor
         // ------------------------------------------------------------------
@@ -107,22 +117,23 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
                 cancellable: false,
             }, async (progress) => {
                 progress.report({ message: 'Verificando Docker...' });
-                connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'starting', 'Verificando Docker...');
+                // Enfoquemos y mostremos el panel de inicio
+                await vscode.commands.executeCommand('sqlEngineLab.showHome');
                 lifecycle.on('statusChanged', (state) => {
                     if (state.message) {
                         progress.report({ message: state.message });
-                        connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, state.status, state.message);
                     }
                 });
                 const result = await lifecycle.startEngine(engineId);
                 if (result.ok) {
                     activeConnectionInfo = result.value;
-                    // Mostrar panel de conexión automáticamente con progreso actual
-                    connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, result.value, undefined, progressManager.getCompletedModules(engineId));
+                    // Enfocar y refrescar el panel unificado
+                    await vscode.commands.executeCommand('sqlEngineLab.showHome');
+                    homePanel_1.HomePanel.refresh();
                     void vscode.window.showInformationMessage(`✓ ${engine.displayName} listo en puerto ${engine.defaultPort}`);
                 }
                 else {
-                    connectionPanel_1.ConnectionPanel.createOrRevealLoading(context.extensionUri, engine, 'error', `Error: ${result.error.message}`);
+                    homePanel_1.HomePanel.refresh();
                     showEngineError(result.error.message, result.error.code);
                 }
             });
@@ -157,19 +168,16 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
         // ------------------------------------------------------------------
         // Mostrar info de conexión
         // ------------------------------------------------------------------
-        vscode.commands.registerCommand('sqlEngineLab.showConnectionInfo', (_engineIdOrItem) => {
+        vscode.commands.registerCommand('sqlEngineLab.showConnectionInfo', () => {
             const currentEngineId = lifecycle.getCurrentEngine();
-            if (!currentEngineId || !activeConnectionInfo) {
+            if (!currentEngineId) {
                 void vscode.window.showInformationMessage('No hay ningún motor corriendo. Inicia un motor primero.');
                 return;
             }
-            const engine = (0, registry_1.getEngineById)(currentEngineId);
-            if (!engine)
-                return;
-            connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
+            void vscode.commands.executeCommand('sqlEngineLab.showHome');
         }),
         // ------------------------------------------------------------------
-        // Completar Módulo de Tutorial
+        // Completar Módulo de Tutorial (Manual)
         // ------------------------------------------------------------------
         vscode.commands.registerCommand('sqlEngineLab.completeTutorial', async (moduleId) => {
             const currentEngineId = lifecycle.getCurrentEngine();
@@ -177,11 +185,77 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
                 return;
             await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
             // Refrescar el estado del panel
-            const engine = (0, registry_1.getEngineById)(currentEngineId);
-            if (engine && activeConnectionInfo) {
-                connectionPanel_1.ConnectionPanel.createOrReveal(context.extensionUri, engine, activeConnectionInfo, undefined, progressManager.getCompletedModules(currentEngineId));
-                void vscode.window.showInformationMessage(`¡Felicidades! Completaste el módulo ${moduleId}.`);
+            homePanel_1.HomePanel.refresh();
+            void vscode.window.showInformationMessage(`¡Felicidades! Completaste el módulo ${moduleId}.`);
+        }),
+        // ------------------------------------------------------------------
+        // Verificar Módulo de Tutorial (Autograder)
+        // ------------------------------------------------------------------
+        vscode.commands.registerCommand('sqlEngineLab.verifyTutorial', async (moduleId) => {
+            const currentEngineId = lifecycle.getCurrentEngine();
+            if (!currentEngineId) {
+                void vscode.window.showErrorMessage('No hay ningún motor corriendo.');
+                return;
             }
+            // 1. Obtener la conexión sandbox
+            const config = vscode.workspace.getConfiguration('sqlEngineLab.credentials');
+            const sandboxProfile = {
+                id: `sandbox-${currentEngineId}`, // Importante: prefijo sandbox- para que sheetManager lo detecte
+                name: 'Sandbox',
+                engineId: currentEngineId,
+                user: config.get('labUser', 'labuser'),
+                database: config.get('labDatabase', 'labdb'),
+                password: config.get('labPassword', 'LabPassword123!'),
+            };
+            // 2. Cargar las reglas de validación desde lab-tutorials.json
+            let tutorialsData = null;
+            try {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                let tutorialsPath = '';
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    tutorialsPath = path.join(workspaceFolders[0].uri.fsPath, 'lab-tutorials.json');
+                }
+                if (!fs.existsSync(tutorialsPath)) {
+                    tutorialsPath = path.join(context.extensionPath, '..', '..', 'lab-tutorials.json');
+                }
+                if (!fs.existsSync(tutorialsPath)) {
+                    tutorialsPath = path.join(context.extensionPath, 'lab-tutorials.json');
+                }
+                if (fs.existsSync(tutorialsPath)) {
+                    tutorialsData = JSON.parse(fs.readFileSync(tutorialsPath, 'utf8'));
+                }
+            }
+            catch (err) {
+                console.error('Error loading tutorials for verification:', err);
+            }
+            const engineTutorials = tutorialsData ? tutorialsData[currentEngineId] : null;
+            const tutorial = engineTutorials ? engineTutorials[moduleId] : null;
+            if (!tutorial) {
+                void vscode.window.showErrorMessage(`No se encontró la definición del tutorial ${moduleId}.`);
+                return;
+            }
+            // 3. Obtener el SQL del usuario del sandbox
+            const userSql = sheetManager.getSandboxSheetText() || '';
+            // 4. Ejecutar el autograder
+            const rules = (tutorial.validation && tutorial.validation.rules) || [];
+            const report = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `SQL Engine Lab: Verificando Reto ${moduleId}...`,
+                cancellable: false,
+            }, async () => {
+                return await validationEngine.validate(currentEngineId, sandboxProfile, rules, userSql);
+            });
+            // 5. Si pasa la validación, marcar como completado
+            if (report.passed) {
+                await progressManager.markModuleAsCompleted(currentEngineId, moduleId);
+                homePanel_1.HomePanel.refresh();
+                void vscode.window.showInformationMessage(`¡Excelente! Reto ${moduleId} completado con éxito.`);
+            }
+            else {
+                void vscode.window.showWarningMessage(`Algunas pruebas fallaron para el reto ${moduleId}. Revisa la consola de validación.`);
+            }
+            // 6. Transmitir el reporte de validación al Webview
+            homePanel_1.HomePanel.sendValidationResult(report);
         }),
         // ------------------------------------------------------------------
         // Copiar comando de conexión

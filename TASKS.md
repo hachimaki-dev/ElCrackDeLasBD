@@ -69,4 +69,6 @@ _(nada)_
 - [x] Rework premium de la pestaña Home con navegación lateral en grid, widgets de estado de motores en vivo y sincronización de progreso gamificado (XP, nivel y vitrina de emblemas) (agente: antigravity, completado 2026-07-13)
 - [x] Corrección de inicialización (Flujo 0) en Windows: centralización de la API de VS Code para evitar múltiples llamadas de acquireVsCodeApi, y búsqueda resiliente de Docker Desktop en el registro y rutas de laboratorio (agente: antigravity, completado 2026-07-13)
 - [x] Solución definitiva para pantalla en blanco en Windows: configuración explícita de localResourceRoots en paneles, inicialización asíncrona del DOM en main.tsx y ampliación del CSP para Google Fonts (agente: antigravity, completado 2026-07-13)
+- [x] Reforma académica y técnica de tutoriales: motor de autocalificación (Autograder) con setups automáticos de base de datos y syllabus universitario de 12 capítulos para Postgres y SQLite (agente: antigravity, completado 2026-07-14)
+
 

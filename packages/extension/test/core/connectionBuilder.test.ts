@@ -67,7 +67,7 @@ suite('ConnectionBuilder', () => {
     assert.strictEqual(details.host, 'localhost');
     assert.strictEqual(details.port, 5432);
     assert.strictEqual(details.user, 'labuser');
-    assert.strictEqual(details.password, 'labpassword');
+    assert.strictEqual(details.password, 'LabPassword123!');
     assert.strictEqual(details.database, 'labdb');
   });
 

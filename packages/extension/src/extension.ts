@@ -24,6 +24,7 @@ import { QueryRunner } from './core/runner/queryRunner';
 import { SheetManager } from './vscode/sheet/sheetManager';
 import { registerSheetCommands } from './vscode/sheet/sheetCommands';
 import { ProgressManager } from './core/progress/progressManager';
+import { ValidationEngine } from './core/validation/validationEngine';
 
 /**
  * Activación de la extensión.
@@ -54,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const sheetManager = new SheetManager();
   const queryRunner = new QueryRunner();
   const progressManager = new ProgressManager(context.globalState);
+  const validationEngine = new ValidationEngine(queryRunner);
 
   // ---- Conectar eventos de diagnóstico al OutputChannel ----
   lifecycle.on('diagnosticLog', (message: string) => {
@@ -80,6 +82,8 @@ export function activate(context: vscode.ExtensionContext): void {
     dockerClient,
     outputChannel,
     progressManager,
+    validationEngine,
+    sheetManager
   );
 
   const sheetDisposables = registerSheetCommands(

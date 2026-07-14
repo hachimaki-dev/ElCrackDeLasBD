@@ -64,7 +64,10 @@ const defaultEnv = {
 function resolveDockerOptions(overrides) {
     const resolvedEnv = { ...defaultEnv, ...overrides };
     const { env, platform, homedir, fsExistsSync, fsReadFileSync, fsReaddirSync, onLog } = resolvedEnv;
-    const log = onLog ?? (() => { });
+    const log = onLog ??
+        (() => {
+            /* no-op */
+        });
     log(`Resolving Docker options for platform: ${platform}`);
     // 1. Respetar DOCKER_HOST si está definido en el entorno
     if (env.DOCKER_HOST) {

@@ -126,8 +126,8 @@ async function runDoctor(dockerClient, resolverOverrides) {
     // ── Check 5: Motores bajo emulación ──
     if (platform.isArm) {
         const emulatedEngines = (0, registry_1.getAllEngines)()
-            .filter(eng => (0, platformInfo_1.requiresEmulation)(eng.id, platform))
-            .map(eng => eng.displayName);
+            .filter((eng) => (0, platformInfo_1.requiresEmulation)(eng.id, platform))
+            .map((eng) => eng.displayName);
         if (emulatedEngines.length > 0) {
             checks.push({
                 name: 'Emulación de motores',
@@ -137,8 +137,8 @@ async function runDoctor(dockerClient, resolverOverrides) {
             });
         }
         const nativeEngines = (0, registry_1.getAllEngines)()
-            .filter(eng => !(0, platformInfo_1.requiresEmulation)(eng.id, platform))
-            .map(eng => eng.displayName);
+            .filter((eng) => !(0, platformInfo_1.requiresEmulation)(eng.id, platform))
+            .map((eng) => eng.displayName);
         if (nativeEngines.length > 0) {
             checks.push({
                 name: 'Motores nativos arm64',
@@ -155,7 +155,7 @@ async function runDoctor(dockerClient, resolverOverrides) {
         });
     }
     // ── Compatibilidad por motor ──
-    const engineCompatibility = (0, registry_1.getAllEngines)().map(engine => {
+    const engineCompatibility = (0, registry_1.getAllEngines)().map((engine) => {
         const emulated = (0, platformInfo_1.requiresEmulation)(engine.id, platform);
         const emulationWarning = (0, platformInfo_1.getEmulationWarning)(engine.id, platform);
         const nativeNote = (0, platformInfo_1.getArm64NativeNote)(engine.id, platform);
@@ -168,9 +168,9 @@ async function runDoctor(dockerClient, resolverOverrides) {
         };
     });
     // ── Resumen ──
-    const passed = checks.filter(c => c.status === 'pass').length;
-    const failed = checks.filter(c => c.status === 'fail').length;
-    const warnings = checks.filter(c => c.status === 'warn').length;
+    const passed = checks.filter((c) => c.status === 'pass').length;
+    const failed = checks.filter((c) => c.status === 'fail').length;
+    const warnings = checks.filter((c) => c.status === 'warn').length;
     return {
         timestamp: new Date().toISOString(),
         platform,

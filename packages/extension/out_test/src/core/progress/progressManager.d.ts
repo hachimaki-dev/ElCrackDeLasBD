@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
 import { EngineId } from '../engines/engine.types';
+import { EngineProgress } from './gamificationEngine';
 export declare class ProgressManager {
     private globalState;
     constructor(globalState: vscode.Memento);
     /**
-     * Obtiene la lista de módulos completados (ej. ["1-1", "1-2"]) para un motor específico.
+     * Obtiene la estructura completa de progreso para un motor específico.
+     */
+    getEngineProgress(engineId: EngineId): EngineProgress;
+    /**
+     * Obtiene la lista de módulos completados (ej. ["1-1", "1-2"]) para compatibilidad hacia atrás parcial.
      */
     getCompletedModules(engineId: EngineId): string[];
     /**
-     * Marca un módulo específico como completado para un motor.
+     * Marca un módulo específico como completado para un motor y aplica la gamificación.
      */
     markModuleAsCompleted(engineId: EngineId, moduleId: string): Promise<void>;
     /**

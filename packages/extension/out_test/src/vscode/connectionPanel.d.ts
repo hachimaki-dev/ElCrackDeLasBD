@@ -13,10 +13,11 @@ export declare class ConnectionPanel {
     private currentEngine;
     private currentInfo?;
     private currentStatus?;
-    private completedModules;
+    private currentMessage?;
+    private engineProgress?;
     private constructor();
-    static createOrReveal(extensionUri: vscode.Uri, engine: EngineDefinition, connectionInfo: ConnectionInfo, status?: EngineStatus, completedModules?: string[]): void;
-    static createOrRevealLoading(extensionUri: vscode.Uri, engine: EngineDefinition, status: EngineStatus, message?: string, completedModules?: string[]): void;
+    static createOrReveal(extensionUri: vscode.Uri, engine: EngineDefinition, connectionInfo: ConnectionInfo, status?: EngineStatus, engineProgress?: any): void;
+    static createOrRevealLoading(extensionUri: vscode.Uri, engine: EngineDefinition, status: EngineStatus, message?: string, engineProgress?: any): void;
     private static show;
     static dispose(): void;
     private loadTutorials;

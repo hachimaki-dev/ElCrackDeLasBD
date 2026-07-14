@@ -17,6 +17,8 @@ import * as vscode from 'vscode';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { DockerClient } from '../core/docker/dockerClient';
 import { EngineTreeViewProvider } from './treeView';
+import { ValidationEngine } from '../core/validation/validationEngine';
+import { SheetManager } from './sheet/sheetManager';
 /**
  * Registra todos los comandos de la extensión en el contexto de VS Code.
  * Retorna un array de Disposables para cleanup al desactivar la extensión.
@@ -26,5 +28,5 @@ import { EngineTreeViewProvider } from './treeView';
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider, dockerClient: DockerClient, outputChannel: vscode.OutputChannel, progressManager: import('../core/progress/progressManager').ProgressManager): vscode.Disposable[];
+export declare function registerCommands(context: vscode.ExtensionContext, lifecycle: ContainerLifecycle, treeProvider: EngineTreeViewProvider, dockerClient: DockerClient, outputChannel: vscode.OutputChannel, progressManager: import('../core/progress/progressManager').ProgressManager, validationEngine: ValidationEngine, sheetManager: SheetManager): vscode.Disposable[];
 //# sourceMappingURL=commands.d.ts.map

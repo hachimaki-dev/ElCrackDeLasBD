@@ -60,6 +60,7 @@ const queryRunner_1 = require("./core/runner/queryRunner");
 const sheetManager_1 = require("./vscode/sheet/sheetManager");
 const sheetCommands_1 = require("./vscode/sheet/sheetCommands");
 const progressManager_1 = require("./core/progress/progressManager");
+const validationEngine_1 = require("./core/validation/validationEngine");
 /**
  * Activación de la extensión.
  * VS Code llama a esta función cuando se activa la extensión
@@ -75,6 +76,8 @@ function activate(context) {
     outputChannel.appendLine(`Plataforma: ${platform.displayString}`);
     outputChannel.appendLine(`Timestamp: ${new Date().toISOString()}`);
     outputChannel.appendLine('');
+    // ---- Bloquear extensión hasta completar Flujo 0 ----
+    void vscode.commands.executeCommand('setContext', 'sqlEngineLab.isReady', false);
     // ---- Crear instancias de las piezas core ----
     const dockerClient = new dockerClient_1.DockerClient();
     const configProvider = new configProvider_1.VsCodeConfigurationProvider();
@@ -84,6 +87,7 @@ function activate(context) {
     const sheetManager = new sheetManager_1.SheetManager();
     const queryRunner = new queryRunner_1.QueryRunner();
     const progressManager = new progressManager_1.ProgressManager(context.globalState);
+    const validationEngine = new validationEngine_1.ValidationEngine(queryRunner);
     // ---- Conectar eventos de diagnóstico al OutputChannel ----
     lifecycle.on('diagnosticLog', (message) => {
         outputChannel.appendLine(message);
@@ -99,7 +103,7 @@ function activate(context) {
         showCollapseAll: false,
     });
     // ---- Registrar comandos ----
-    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager);
+    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager);
     const sheetDisposables = (0, sheetCommands_1.registerSheetCommands)(context, sheetManager, vault, queryRunner, lifecycle);
     // ---- Agregar todos los disposables al contexto ----
     // VS Code los limpiará automáticamente al desactivar la extensión
@@ -108,6 +112,8 @@ function activate(context) {
     new vscode.Disposable(() => {
         void lifecycle.stopEngine();
     }));
+    // ---- Iniciar el Flujo 0 / Mostrar Home al arrancar ----
+    void vscode.commands.executeCommand('sqlEngineLab.showHome');
 }
 /**
  * Desactivación de la extensión.

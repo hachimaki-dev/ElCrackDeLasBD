@@ -50,15 +50,17 @@ class ConnectionPanel {
     currentEngine;
     currentInfo;
     currentStatus;
-    completedModules = [];
-    constructor(panel, extensionUri, engine, connectionInfo, status, completedModules) {
+    currentMessage;
+    engineProgress; // any to avoid direct import coupling if possible, or import EngineProgress
+    constructor(panel, extensionUri, engine, connectionInfo, status, message, engineProgress) {
         this.extensionUri = extensionUri;
         this.panel = panel;
         this.currentEngine = engine;
         this.currentInfo = connectionInfo;
         this.currentStatus = status;
-        if (completedModules)
-            this.completedModules = completedModules;
+        this.currentMessage = message;
+        if (engineProgress)
+            this.engineProgress = engineProgress;
         this.update();
         this.panel.webview.onDidReceiveMessage(async (message) => {
             if (message.command === 'copy') {
@@ -78,13 +80,13 @@ class ConnectionPanel {
             ConnectionPanel.currentPanel = undefined;
         });
     }
-    static createOrReveal(extensionUri, engine, connectionInfo, status, completedModules) {
-        ConnectionPanel.show(extensionUri, engine, connectionInfo, status || 'running', undefined, completedModules);
+    static createOrReveal(extensionUri, engine, connectionInfo, status, engineProgress) {
+        ConnectionPanel.show(extensionUri, engine, connectionInfo, status || 'running', undefined, engineProgress);
     }
-    static createOrRevealLoading(extensionUri, engine, status, message, completedModules) {
-        ConnectionPanel.show(extensionUri, engine, undefined, status, message, completedModules);
+    static createOrRevealLoading(extensionUri, engine, status, message, engineProgress) {
+        ConnectionPanel.show(extensionUri, engine, undefined, status, message, engineProgress);
     }
-    static show(extensionUri, engine, connectionInfo, status, _message, completedModules) {
+    static show(extensionUri, engine, connectionInfo, status, _message, engineProgress) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : vscode.ViewColumn.One;
@@ -93,16 +95,20 @@ class ConnectionPanel {
             ConnectionPanel.currentPanel.currentEngine = engine;
             ConnectionPanel.currentPanel.currentInfo = connectionInfo;
             ConnectionPanel.currentPanel.currentStatus = status;
-            if (completedModules)
-                ConnectionPanel.currentPanel.completedModules = completedModules;
+            ConnectionPanel.currentPanel.currentMessage = _message;
+            if (engineProgress)
+                ConnectionPanel.currentPanel.engineProgress = engineProgress;
             ConnectionPanel.currentPanel.update();
             return;
         }
         const panel = vscode.window.createWebviewPanel('sqlEngineLabConnection', `SQL Lab — ${engine.displayName}`, column ?? vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(extensionUri, 'out'),
+            ],
         });
-        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo, status, completedModules);
+        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, engine, connectionInfo, status, _message, engineProgress);
     }
     static dispose() {
         if (ConnectionPanel.currentPanel) {
@@ -120,8 +126,9 @@ class ConnectionPanel {
                 try {
                     tutorialsData = JSON.parse(fs.readFileSync(wsPath, 'utf8'));
                 }
-                catch (e) {
-                    console.error("Error reading workspace lab-tutorials", e);
+                catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.error('Error reading workspace lab-tutorials', err);
                 }
             }
         }
@@ -137,7 +144,8 @@ class ConnectionPanel {
                 }
             }
             catch (err) {
-                console.error("Error reading extension path lab-tutorials", err);
+                // eslint-disable-next-line no-console
+                console.error('Error reading extension path lab-tutorials', err);
             }
         }
         return tutorialsData;
@@ -149,17 +157,18 @@ class ConnectionPanel {
         const tutorialsData = this.loadTutorials();
         const engineTutorials = tutorialsData ? tutorialsData[this.currentEngine.id] : undefined;
         // Enviar estado al frontend React
-        this.panel.webview.postMessage({
+        void this.panel.webview.postMessage({
             command: 'updateState',
             engine: {
                 id: this.currentEngine.id,
                 displayName: this.currentEngine.displayName,
                 status: this.currentStatus,
+                message: this.currentMessage,
                 connectionCommand: this.currentInfo?.connectionCommand,
                 port: this.currentInfo?.port,
-                completedModules: this.completedModules
+                engineProgress: this.engineProgress,
             },
-            tutorials: engineTutorials
+            tutorials: engineTutorials,
         });
     }
     buildHtml() {
@@ -167,25 +176,20 @@ class ConnectionPanel {
         // Rutas a los assets compilados de Vite
         const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview-ui', 'assets', 'index.css'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview-ui', 'assets', 'index.js'));
-        // Pantalla de carga tradicional (para fallback o antes de cargar React completo si se desea, 
+        // Pantalla de carga tradicional (para fallback o antes de cargar React completo si se desea,
         // pero Vite es rápido. Vamos a cargar React siempre para mantener la estética).
         return /* html */ `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource} https://fonts.gstatic.com;">
   <title>SQL Engine Lab</title>
-  <link rel="stylesheet" href="${stylesUri}">
-  <script>
-    // Initialize VS Code API global before React loads
-    const vscode = acquireVsCodeApi();
-    window.acquireVsCodeApi = () => vscode;
-  </script>
+  <link rel="stylesheet" href="${stylesUri.toString()}">
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="${scriptUri}"></script>
+  <script type="module" src="${scriptUri.toString()}"></script>
 </body>
 </html>`;
     }

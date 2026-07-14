@@ -28,6 +28,7 @@ interface Gamification {
   level: number;
   xpToNextLevel: number;
   badges: any[];
+  streak?: number;
 }
 
 export const HomeApp: React.FC = () => {

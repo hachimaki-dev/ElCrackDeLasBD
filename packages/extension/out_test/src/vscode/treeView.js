@@ -112,6 +112,7 @@ class EngineTreeViewProvider {
     onDidChangeTreeData = this._onDidChangeTreeData.event;
     /** Estado de cada motor en el árbol */
     engineStatuses = new Map();
+    isReady = false;
     constructor(lifecycle) {
         this.lifecycle = lifecycle;
         // Inicializar todos los motores como detenidos
@@ -135,7 +136,14 @@ class EngineTreeViewProvider {
     getTreeItem(element) {
         return element;
     }
+    setIsReady(isReady) {
+        this.isReady = isReady;
+        this.refresh();
+    }
     getChildren() {
+        if (!this.isReady) {
+            return [];
+        }
         return (0, registry_1.getAllEngines)().map((engine) => new EngineTreeItem(engine, this.engineStatuses.get(engine.id) ?? 'stopped'));
     }
     /**

@@ -30,6 +30,7 @@ import { PlatformInfo } from './platformInfo';
 export declare class ContainerLifecycle extends EventEmitter {
     private currentEngineId;
     private currentStatus;
+    private currentConnectionInfo;
     private readonly dockerClient;
     private readonly configProvider?;
     private readonly platform;
@@ -59,6 +60,10 @@ export declare class ContainerLifecycle extends EventEmitter {
      * Retorna el estado actual del ciclo de vida.
      */
     getStatus(): EngineStatus;
+    /**
+     * Retorna la información de conexión activa del motor en ejecución, o null si no hay ninguno.
+     */
+    getCurrentConnectionInfo(): ConnectionInfo | null;
     /**
      * Espera a que el healthcheck del motor pase.
      * Usa polling con el timeout definido por el motor.

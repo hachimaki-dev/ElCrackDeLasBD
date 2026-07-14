@@ -34,6 +34,7 @@ const platformInfo_1 = require("./platformInfo");
 class ContainerLifecycle extends events_1.EventEmitter {
     currentEngineId = null;
     currentStatus = 'stopped';
+    currentConnectionInfo = null;
     dockerClient;
     configProvider;
     platform;
@@ -112,9 +113,15 @@ class ContainerLifecycle extends events_1.EventEmitter {
         let startResult;
         // Obtener credenciales del usuario
         const config = this.configProvider ? this.configProvider.getConfig() : undefined;
-        const envUser = config?.labUser || engine.connectionTemplate.defaultUser || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
-        const envPassword = config?.labPassword || engine.connectionTemplate.defaultPassword || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
-        const envDatabase = config?.labDatabase || engine.connectionTemplate.defaultDatabase || engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
+        const envUser = config?.labUser ||
+            engine.connectionTemplate.defaultUser ||
+            engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_USER;
+        const envPassword = config?.labPassword ||
+            engine.connectionTemplate.defaultPassword ||
+            engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_PASSWORD;
+        const envDatabase = config?.labDatabase ||
+            engine.connectionTemplate.defaultDatabase ||
+            engine_types_1.DOCKER_IMAGE_CONFIG.defaultEnv.LAB_DATABASE;
         // Nota: La validación estricta de complejidad fue eliminada porque
         // gvenzl/oracle-free acepta contraseñas simples en entornos de desarrollo local.
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -141,7 +148,9 @@ class ContainerLifecycle extends events_1.EventEmitter {
             if (startResult.ok) {
                 break; // Éxito
             }
-            if (startResult.error.code === 'PORT_IN_USE' && engine.defaultPort !== 0 && attempt < maxRetries) {
+            if (startResult.error.code === 'PORT_IN_USE' &&
+                engine.defaultPort !== 0 &&
+                attempt < maxRetries) {
                 this.updateStatus(engineId, 'starting', `Puerto ${allocatedPort} ocupado. Probando ${allocatedPort + 1}...`);
             }
             else {
@@ -206,6 +215,7 @@ EXIT;
                 : {}),
         };
         this.updateStatus(engineId, 'running', `${engine.displayName} listo en puerto ${allocatedPort}`);
+        this.currentConnectionInfo = connectionInfo;
         this.emit('engineStarted', connectionInfo);
         return (0, engine_types_1.success)(connectionInfo);
     }
@@ -230,6 +240,7 @@ EXIT;
         this.emit('engineStopped', engineId);
         this.currentEngineId = null;
         this.currentStatus = 'stopped';
+        this.currentConnectionInfo = null;
         return (0, engine_types_1.success)(undefined);
     }
     /**
@@ -243,6 +254,12 @@ EXIT;
      */
     getStatus() {
         return this.currentStatus;
+    }
+    /**
+     * Retorna la información de conexión activa del motor en ejecución, o null si no hay ninguno.
+     */
+    getCurrentConnectionInfo() {
+        return this.currentConnectionInfo;
     }
     /**
      * Espera a que el healthcheck del motor pase.
