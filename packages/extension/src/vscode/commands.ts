@@ -27,6 +27,7 @@ import { HomePanel } from './homePanel';
 import { ConnectionProfile } from '../core/credentials/vault';
 import { ValidationEngine } from '../core/validation/validationEngine';
 import { SheetManager } from './sheet/sheetManager';
+import { AdminService } from '../core/admin/adminService';
 
 
 /**
@@ -47,6 +48,7 @@ export function registerCommands(
   progressManager: import('../core/progress/progressManager').ProgressManager,
   validationEngine: ValidationEngine,
   sheetManager: SheetManager,
+  adminService: AdminService,
 ): vscode.Disposable[] {
   // Guardar la última conexión activa para mostrarla en el panel
   let activeConnectionInfo: ConnectionInfo | undefined;
@@ -72,6 +74,7 @@ export function registerCommands(
         dockerClient,
         lifecycle,
         progressManager,
+        adminService,
         () => {
           treeProvider.setIsReady(true);
         }

@@ -61,6 +61,7 @@ const sheetManager_1 = require("./vscode/sheet/sheetManager");
 const sheetCommands_1 = require("./vscode/sheet/sheetCommands");
 const progressManager_1 = require("./core/progress/progressManager");
 const validationEngine_1 = require("./core/validation/validationEngine");
+const adminService_1 = require("./core/admin/adminService");
 /**
  * Activación de la extensión.
  * VS Code llama a esta función cuando se activa la extensión
@@ -88,6 +89,7 @@ function activate(context) {
     const queryRunner = new queryRunner_1.QueryRunner();
     const progressManager = new progressManager_1.ProgressManager(context.globalState);
     const validationEngine = new validationEngine_1.ValidationEngine(queryRunner);
+    const adminService = new adminService_1.AdminService(queryRunner, vault);
     // ---- Conectar eventos de diagnóstico al OutputChannel ----
     lifecycle.on('diagnosticLog', (message) => {
         outputChannel.appendLine(message);
@@ -103,7 +105,7 @@ function activate(context) {
         showCollapseAll: false,
     });
     // ---- Registrar comandos ----
-    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager);
+    const commandDisposables = (0, commands_1.registerCommands)(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager, adminService);
     const sheetDisposables = (0, sheetCommands_1.registerSheetCommands)(context, sheetManager, vault, queryRunner, lifecycle);
     // ---- Agregar todos los disposables al contexto ----
     // VS Code los limpiará automáticamente al desactivar la extensión

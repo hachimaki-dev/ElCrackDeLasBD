@@ -19,6 +19,9 @@ graph TB
         CON["core/connection/connectionBuilder.ts<br/>Generador de comandos de conexión"]
         PLT["core/docker/platformInfo.ts<br/>Detección de SO y Arch"]
         DIA["core/docker/dockerDiagnostics.ts<br/>Sistema Doctor"]
+        ADM["core/admin/adminService.ts<br/>Orquestador de Administración"]
+        ADA["core/admin/adminAdapters.ts<br/>Adaptadores de Metadatos SQL"]
+        RUN["core/runner/queryRunner.ts<br/>Ejecutor de Consultas en Contenedor"]
     end
 
     subgraph "Docker"
@@ -43,6 +46,11 @@ graph TB
     LCY -.->|eventos de estado| UI
     CON -.->|comando copiado| USR
     USR -->|conexión directa| CTR
+    
+    UI --> ADM
+    ADM --> RUN
+    ADM --> ADA
+    RUN --> CTR
 ```
 
 ## Flujo de datos
@@ -52,6 +60,7 @@ graph TB
 3. **`ContainerLifecycle`** emite eventos de estado (`pulling` → `starting` → `running`) que el Tree View y el Webview Panel observan para actualizar la UI.
 4. **`ConnectionBuilder`** genera el comando de conexión (ej. `psql -h localhost -p 5432 -U labuser -d labdb`) usando la template del motor.
 5. **Usuario copia el comando** y lo pega en cualquier terminal para conectarse al motor.
+6. **Explorador Visual realiza consultas de catálogo** → La UI solicita metadatos a `AdminService`, que utiliza `AdminAdapters` para armar la query y `QueryRunner` para ejecutarla en el contenedor vía Docker socket, retornando la estructura (tablas, columnas, filas, usuarios).
 
 ## Principios de separación
 
@@ -61,6 +70,8 @@ graph TB
 | `core/engines/` | Definición de motores, catálogo | Docker, VS Code |
 | `core/docker/` | Gestión de contenedores e imágenes | Motores específicos, VS Code |
 | `core/connection/` | Generación de connection strings | Docker, VS Code |
+| `core/admin/` | Administración visual (queries de catálogo, crear BDs, usuarios) | Interfaz de VS Code |
+| `core/runner/` | Ejecución de consultas SQL directas en contenedor | Interfaz de VS Code |
 
 ## Imagen Docker
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DockerClient } from '../core/docker/dockerClient';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { ProgressManager } from '../core/progress/progressManager';
+import { AdminService } from '../core/admin/adminService';
 export type HomeState = 'checking_docker' | 'docker_not_installed' | 'docker_not_running' | 'starting_docker' | 'pulling_images' | 'ready';
 export declare class HomePanel {
     private static currentPanel;
@@ -10,13 +11,14 @@ export declare class HomePanel {
     private readonly extensionUri;
     private readonly lifecycle;
     private readonly progressManager;
+    private readonly adminService;
     private currentState;
     private pullProgress?;
     private isPolling;
     private currentMessage?;
     private readonly onReadyCallback?;
     private constructor();
-    static createOrShow(extensionUri: vscode.Uri, dockerClient: DockerClient, lifecycle: ContainerLifecycle, progressManager: ProgressManager, onReady?: () => void): void;
+    static createOrShow(extensionUri: vscode.Uri, dockerClient: DockerClient, lifecycle: ContainerLifecycle, progressManager: ProgressManager, adminService: AdminService, onReady?: () => void): void;
     static refresh(): void;
     /**
      * Envía el reporte de la autocalificación al Webview React activo.

@@ -64,7 +64,7 @@ const homePanel_1 = require("./homePanel");
  * @param treeProvider - Provider del Tree View para refrescar tras acciones
  * @returns Array de Disposables para registrar en context.subscriptions
  */
-function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager) {
+function registerCommands(context, lifecycle, treeProvider, dockerClient, outputChannel, progressManager, validationEngine, sheetManager, adminService) {
     // Guardar la última conexión activa para mostrarla en el panel
     let activeConnectionInfo;
     // Escuchar cuando un motor arranca para guardar la info de conexión
@@ -80,7 +80,7 @@ function registerCommands(context, lifecycle, treeProvider, dockerClient, output
         // Mostrar Home / Setup (Flujo 0)
         // ------------------------------------------------------------------
         vscode.commands.registerCommand('sqlEngineLab.showHome', () => {
-            homePanel_1.HomePanel.createOrShow(context.extensionUri, dockerClient, lifecycle, progressManager, () => {
+            homePanel_1.HomePanel.createOrShow(context.extensionUri, dockerClient, lifecycle, progressManager, adminService, () => {
                 treeProvider.setIsReady(true);
             });
         }),

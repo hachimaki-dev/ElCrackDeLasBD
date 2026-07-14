@@ -87,12 +87,6 @@ print_section "Estructura — Archivos requeridos"
 required_files=(
   "src/core/engines/engine.types.ts"
   "src/core/engines/registry.ts"
-  "src/core/engines/postgres.engine.ts"
-  "src/core/engines/mysql.engine.ts"
-  "src/core/engines/mariadb.engine.ts"
-  "src/core/engines/sqlite.engine.ts"
-  "src/core/engines/oracle.engine.ts"
-  "src/core/engines/sqlserver.engine.ts"
   "src/core/docker/dockerClient.ts"
   "src/core/docker/containerLifecycle.ts"
   "src/core/connection/connectionBuilder.ts"
@@ -111,22 +105,19 @@ for file in "${required_files[@]}"; do
 done
 
 # ---- 3. Verificar interfaces clave en el código compilado ----
-print_section "Contratos — Verificando Engine Adapters"
+print_section "Contratos — Verificando Engine Registry"
 
-engines=("postgres" "mysql" "mariadb" "sqlite" "oracle" "sqlserver")
-for engine in "${engines[@]}"; do
-  engine_file="$EXTENSION_DIR/out/core/engines/${engine}.engine.js"
-  if [[ -f "$engine_file" ]]; then
-    # Verificar que el adapter exporta la definición
-    if grep -q "exports\." "$engine_file" 2>/dev/null; then
-      print_pass "Adapter ${engine}: exportado correctamente"
-    else
-      print_fail "Adapter ${engine}: no tiene exports"
-    fi
+# Verificar que el registry se compila correctamente y expone los métodos requeridos
+registry_file="$EXTENSION_DIR/out/core/engines/registry.js"
+if [[ -f "$registry_file" ]]; then
+  if grep -q "exports\.getAllEngines" "$registry_file" 2>/dev/null && grep -q "exports\.getEngineById" "$registry_file" 2>/dev/null; then
+    print_pass "Registry expone getAllEngines y getEngineById"
   else
-    print_fail "Adapter ${engine}: archivo JS no encontrado"
+    print_fail "Registry no expone la API pública esperada"
   fi
-done
+else
+  print_fail "Registry: archivo JS no encontrado"
+fi
 
 # Verificar que el registry registra los 6 motores
 registry_file="$EXTENSION_DIR/out/core/engines/registry.js"

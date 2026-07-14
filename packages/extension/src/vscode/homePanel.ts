@@ -7,6 +7,8 @@ import { PullProgress, EngineStatus, EngineState, ConnectionInfo } from '../core
 import { detectPlatform } from '../core/docker/platformInfo';
 import { ContainerLifecycle } from '../core/docker/containerLifecycle';
 import { ProgressManager } from '../core/progress/progressManager';
+import { AdminService } from '../core/admin/adminService';
+import { ConnectionProfile } from '../core/credentials/vault';
 
 export type HomeState = 'checking_docker' | 'docker_not_installed' | 'docker_not_running' | 'starting_docker' | 'pulling_images' | 'ready';
 
@@ -18,6 +20,7 @@ export class HomePanel {
   private readonly extensionUri: vscode.Uri;
   private readonly lifecycle: ContainerLifecycle;
   private readonly progressManager: ProgressManager;
+  private readonly adminService: AdminService;
   private currentState: HomeState = 'checking_docker';
   private pullProgress?: PullProgress;
   private isPolling = false;
@@ -30,6 +33,7 @@ export class HomePanel {
     dockerClient: DockerClient,
     lifecycle: ContainerLifecycle,
     progressManager: ProgressManager,
+    adminService: AdminService,
     onReady?: () => void
   ) {
     this.panel = panel;
@@ -37,6 +41,7 @@ export class HomePanel {
     this.dockerClient = dockerClient;
     this.lifecycle = lifecycle;
     this.progressManager = progressManager;
+    this.adminService = adminService;
     this.onReadyCallback = onReady;
 
     this.panel.webview.html = this.buildHtml();
@@ -83,6 +88,163 @@ export class HomePanel {
           await this.handleStartDocker();
         } else if (message.command === 'getInitialState') {
           this.updateWebviewState();
+        } else if (message.command === 'getAdminMetadata') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          if (engineId && activeConn) {
+            const profile: ConnectionProfile = {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            };
+            const result = await this.adminService.getMetadata(engineId, profile);
+            if (result.ok) {
+              this.panel.webview.postMessage({
+                command: 'updateAdminMetadata',
+                report: result.value,
+              });
+            } else {
+              this.panel.webview.postMessage({
+                command: 'adminError',
+                message: result.error.message,
+              });
+            }
+          }
+        } else if (message.command === 'createDatabase') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          const dbName = message.name;
+          if (engineId && activeConn && dbName) {
+            const profile: ConnectionProfile = {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            };
+            const result = await this.adminService.createDatabase(engineId, profile, dbName);
+            this.panel.webview.postMessage({
+              command: 'databaseCreated',
+              success: result.ok,
+              message: result.ok ? result.value : result.error.message,
+            });
+          }
+        } else if (message.command === 'createUser') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          const { username, password } = message;
+          if (engineId && activeConn && username) {
+            const profile: ConnectionProfile = {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            };
+            const result = await this.adminService.createUser(engineId, profile, username, password);
+            this.panel.webview.postMessage({
+              command: 'userCreated',
+              success: result.ok,
+              message: result.ok ? result.value : result.error.message,
+            });
+          }
+        } else if (message.command === 'getTablePreview') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          const { tableName, schemaName } = message;
+          if (engineId && activeConn && tableName) {
+            const profile: ConnectionProfile = {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            };
+            const result = await this.adminService.getTablePreview(engineId, profile, tableName, schemaName);
+            this.panel.webview.postMessage({
+              command: 'updateTablePreview',
+              preview: result.ok ? result.value : undefined,
+              error: result.ok ? undefined : result.error.message,
+            });
+          }
+        } else if (message.command === 'getSavedCredentials') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          if (engineId) {
+            const activeProfile: ConnectionProfile | undefined = activeConn ? {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            } : undefined;
+            const credentials = await this.adminService.getSavedCredentials(engineId, activeProfile);
+            this.panel.webview.postMessage({
+              command: 'updateSavedCredentials',
+              credentials,
+            });
+          }
+        } else if (message.command === 'activateDatabase') {
+          const { dbName } = message;
+          if (dbName) {
+            this.lifecycle.updateConnectionDetails(dbName);
+            this.updateWebviewState();
+            void vscode.window.showInformationMessage(`✓ Conexión activa cambiada a base de datos: ${dbName}`);
+          }
+        } else if (message.command === 'activateUser') {
+          const { username } = message;
+          if (username) {
+            const engineId = this.lifecycle.getCurrentEngine();
+            if (engineId) {
+              const activeConn = this.lifecycle.getCurrentConnectionInfo();
+              let password = await this.adminService.getPasswordForUser(engineId, username);
+              
+              if (!password && activeConn && username === activeConn.user) {
+                password = activeConn.password;
+              }
+              
+              if (!password) {
+                const inputPass = await vscode.window.showInputBox({
+                  title: `SQL Engine Lab: Contraseña para ${username}`,
+                  prompt: `Ingresa la contraseña para conectarte como ${username} al motor ${engineId}`,
+                  password: true,
+                });
+                if (inputPass === undefined) return;
+                password = inputPass;
+              }
+
+              this.lifecycle.updateConnectionDetails(undefined, username, password);
+              this.updateWebviewState();
+              void vscode.window.showInformationMessage(`✓ Conexión activa cambiada a usuario: ${username}`);
+            }
+          }
+        } else if (message.command === 'executeTableCommand') {
+          const engineId = this.lifecycle.getCurrentEngine();
+          const activeConn = this.lifecycle.getCurrentConnectionInfo();
+          const { sqlText } = message;
+          if (engineId && activeConn && sqlText) {
+            const profile: ConnectionProfile = {
+              id: `sandbox-${engineId}`,
+              name: 'Sandbox',
+              engineId,
+              user: activeConn.user,
+              database: activeConn.database,
+              password: activeConn.password,
+            };
+            const result = await this.adminService.executeCommand(profile, sqlText);
+            this.panel.webview.postMessage({
+              command: 'tableCommandExecuted',
+              success: result.ok,
+              message: result.ok ? 'Comando ejecutado con éxito.' : result.error.message,
+            });
+          }
         }
       } catch (err: any) {
         this.lifecycle.emit('diagnosticLog', `[HomePanel] Error handling message: ${err?.message || err}`);
@@ -97,6 +259,7 @@ export class HomePanel {
     dockerClient: DockerClient,
     lifecycle: ContainerLifecycle,
     progressManager: ProgressManager,
+    adminService: AdminService,
     onReady?: () => void
   ): void {
     const column = vscode.window.activeTextEditor
@@ -121,7 +284,7 @@ export class HomePanel {
       }
     );
 
-    HomePanel.currentPanel = new HomePanel(panel, extensionUri, dockerClient, lifecycle, progressManager, onReady);
+    HomePanel.currentPanel = new HomePanel(panel, extensionUri, dockerClient, lifecycle, progressManager, adminService, onReady);
   }
 
   static refresh(): void {

@@ -340,6 +340,52 @@ EXIT;
   }
 
   /**
+   * Actualiza la información de conexión activa en runtime (base de datos o usuario).
+   * Genera nuevamente el comando de conexión.
+   */
+  public updateConnectionDetails(database?: string, user?: string, password?: string): void {
+    if (!this.currentConnectionInfo || !this.currentEngineId) return;
+    
+    const engine = getEngineById(this.currentEngineId);
+    if (!engine) return;
+
+    const updatedUser = user || this.currentConnectionInfo.user;
+    const updatedDb = database || this.currentConnectionInfo.database;
+    const updatedPwd = password || this.currentConnectionInfo.password;
+
+    const details = {
+      host: this.currentConnectionInfo.host,
+      port: this.currentConnectionInfo.port,
+      user: updatedUser,
+      password: updatedPwd,
+      database: updatedDb,
+    };
+
+    const connectionCommand = buildConnectionCommand(
+      engine,
+      details,
+      false
+    );
+
+    const adminConnectionCommand = engine.connectionTemplate.adminUser
+      ? buildConnectionCommand(engine, details, true)
+      : undefined;
+
+    this.currentConnectionInfo = {
+      host: details.host,
+      port: details.port,
+      user: details.user,
+      password: details.password,
+      database: details.database,
+      connectionCommand,
+      adminConnectionCommand,
+    };
+
+    // Emitir que la conexión cambió
+    this.emit('engineStarted', this.currentConnectionInfo);
+  }
+
+  /**
    * Espera a que el healthcheck del motor pase.
    * Usa polling con el timeout definido por el motor.
    */

@@ -99,21 +99,23 @@ class DockerClient {
         if (userProfile) {
             paths.push(`${userProfile}\\Applications\\Docker Desktop.exe`);
         }
-        // Consulta de Registro 1: App Paths para Docker Desktop.exe
+        // Consulta de Registro 1: App Paths para Docker Desktop.exe usando reg.exe
         try {
-            const { stdout: appPath } = await execAsync(`powershell -Command "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Docker Desktop.exe' -ErrorAction SilentlyContinue).'(default)'"`);
-            if (appPath && appPath.trim()) {
-                paths.unshift(appPath.trim());
+            const { stdout: regOutput } = await execAsync(`reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Docker Desktop.exe" /ve`, { timeout: 1000 });
+            const match = regOutput.match(/REG_SZ\s+(.*)/);
+            if (match && match[1]) {
+                paths.unshift(match[1].trim());
             }
         }
         catch {
             // Ignorar si falla la consulta
         }
-        // Consulta de Registro 2: Clave de instalación de Docker Inc
+        // Consulta de Registro 2: Clave de instalación de Docker Inc usando reg.exe
         try {
-            const { stdout: installPath } = await execAsync(`powershell -Command "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Docker Inc.\\Docker' -ErrorAction SilentlyContinue).InstallPath"`);
-            if (installPath && installPath.trim()) {
-                const cleanPath = installPath.trim();
+            const { stdout: regOutput } = await execAsync(`reg query "HKLM\\SOFTWARE\\Docker Inc.\\Docker" /v InstallPath`, { timeout: 1000 });
+            const match = regOutput.match(/InstallPath\s+REG_SZ\s+(.*)/i);
+            if (match && match[1]) {
+                const cleanPath = match[1].trim();
                 paths.unshift(`${cleanPath}\\Docker Desktop.exe`);
                 paths.unshift(`${cleanPath}\\Docker\\Docker Desktop.exe`);
                 paths.unshift(`${cleanPath}\\frontend\\Docker Desktop.exe`);
@@ -124,7 +126,7 @@ class DockerClient {
         }
         // Búsqueda dinámica con where.exe docker para inferir la ruta de instalación
         try {
-            const { stdout: whereDocker } = await execAsync(`where.exe docker`);
+            const { stdout: whereDocker } = await execAsync(`where.exe docker`, { timeout: 1000 });
             if (whereDocker && whereDocker.trim()) {
                 const firstPath = whereDocker.split('\n')[0].trim();
                 if (firstPath.toLowerCase().includes('docker')) {
@@ -166,7 +168,7 @@ class DockerClient {
      */
     async isDockerInstalled(osPlatform) {
         try {
-            await execAsync('docker --version');
+            await execAsync('docker --version', { timeout: 2000 });
             return true;
         }
         catch {
@@ -192,7 +194,7 @@ class DockerClient {
                 const paths = this.getMacDockerPaths();
                 for (const p of paths) {
                     if (fs.existsSync(p)) {
-                        await execAsync(`open -a "${p}"`);
+                        await execAsync(`open -a "${p}"`, { timeout: 2000 });
                         return true;
                     }
                 }
@@ -201,7 +203,7 @@ class DockerClient {
                 const paths = await this.getWindowsDockerPaths();
                 for (const p of paths) {
                     if (fs.existsSync(p)) {
-                        await execAsync(`powershell -Command "Start-Process '${p}'"`);
+                        await execAsync(`cmd.exe /c start "" "${p}"`, { timeout: 2000 });
                         return true;
                     }
                 }
@@ -209,20 +211,20 @@ class DockerClient {
             else if (os === 'linux') {
                 // En Linux, primero intentamos Docker Desktop
                 try {
-                    await execAsync('systemctl --user start docker-desktop');
+                    await execAsync('systemctl --user start docker-desktop', { timeout: 2000 });
                     return true;
                 }
                 catch {
                     // Si falla, asumimos que es Docker Engine nativo.
                     // Usamos pkexec para pedir permisos de sudo con interfaz gráfica nativa.
                     try {
-                        await execAsync('pkexec systemctl start docker');
+                        await execAsync('pkexec systemctl start docker', { timeout: 2000 });
                         return true;
                     }
                     catch {
                         // Fallback para distribuciones sin systemd
                         try {
-                            await execAsync('pkexec service docker start');
+                            await execAsync('pkexec service docker start', { timeout: 2000 });
                             return true;
                         }
                         catch {

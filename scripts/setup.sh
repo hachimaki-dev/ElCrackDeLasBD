@@ -68,6 +68,40 @@ else
   fail "npm no encontrado (se instala con Node.js)"
 fi
 
+# ---- Dependencias npm del Webview UI ----
+section "Dependencias npm (packages/webview-ui)"
+
+WEBVIEW_DIR="$PROJECT_ROOT/packages/webview-ui"
+
+if [[ -d "$WEBVIEW_DIR/node_modules" ]]; then
+  pass "webview-ui: node_modules/ presente"
+else
+  if [[ "$CHECK_ONLY" == "false" ]]; then
+    info "Instalando dependencias de webview-ui..."
+    if (cd "$WEBVIEW_DIR" && npm install); then
+      pass "Dependencias de webview-ui instaladas correctamente"
+    else
+      fail "npm install en webview-ui falló"
+    fi
+  else
+    fail "webview-ui: node_modules/ no encontrado. Ejecutar: cd packages/webview-ui && npm install"
+  fi
+fi
+
+# ---- Construcción de webview-ui ----
+section "Construcción de webview-ui"
+
+if [[ "$CHECK_ONLY" == "false" ]]; then
+  info "Construyendo webview-ui..."
+  if (cd "$WEBVIEW_DIR" && npm run build); then
+    pass "webview-ui construido correctamente"
+  else
+    fail "npm run build en webview-ui falló"
+  fi
+else
+  info "Modo check-only: omitiendo build de webview-ui"
+fi
+
 # ---- Dependencias npm de la extensión ----
 section "Dependencias npm (packages/extension)"
 
@@ -90,11 +124,11 @@ if [[ -d "$EXTENSION_DIR/node_modules" ]]; then
   pass "node_modules/ presente"
 else
   if [[ "$CHECK_ONLY" == "false" ]]; then
-    info "Instalando dependencias npm..."
+    info "Instalando dependencias npm de la extensión..."
     if (cd "$EXTENSION_DIR" && npm install); then
-      pass "Dependencias instaladas correctamente"
+      pass "Dependencias de la extensión instaladas correctamente"
     else
-      fail "npm install falló"
+      fail "npm install de la extensión falló"
     fi
   else
     fail "node_modules/ no encontrado. Ejecutar: cd packages/extension && npm install"

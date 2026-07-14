@@ -69,7 +69,21 @@ const path = __importStar(require("path"));
  * Busca el archivo 'lab-contract.json' subiendo por los directorios de forma resiliente.
  */
 function findContractPath() {
-    let currentDir = __dirname;
+    // Primero intentar subiendo desde process.cwd()
+    let currentDir = process.cwd();
+    while (true) {
+        const checkPath = path.join(currentDir, 'lab-contract.json');
+        if (fs.existsSync(checkPath)) {
+            return checkPath;
+        }
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) {
+            break;
+        }
+        currentDir = parentDir;
+    }
+    // Si no se encuentra, intentar subiendo desde __dirname
+    currentDir = __dirname;
     while (true) {
         const checkPath = path.join(currentDir, 'lab-contract.json');
         if (fs.existsSync(checkPath)) {

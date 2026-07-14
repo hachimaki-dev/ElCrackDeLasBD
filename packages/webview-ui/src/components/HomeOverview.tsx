@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EngineCatalog } from './EngineCatalog';
 import { WaveformCanvas } from './WaveformCanvas';
+import { DbExplorerTab } from './DbExplorer/DbExplorerTab';
 
 interface EngineData {
   id: string;
@@ -44,6 +45,7 @@ export const HomeOverview: React.FC<OverviewProps> = ({
 }) => {
   const activeEngine = engines.find((e) => e.status !== 'stopped');
   const isActive = activeEngine?.status === 'running';
+  const [viewMode, setViewMode] = useState<'diagnostics' | 'explorer'>('diagnostics');
 
   // SVG selector for database engine logos
   const renderEngineSvg = (id: string) => {
@@ -187,9 +189,7 @@ export const HomeOverview: React.FC<OverviewProps> = ({
         }, 1500);
       }
     } else if (action === 'explorer') {
-      // Mock explorer or notify
-      onExecuteCommand('executeCommand', ['workbench.action.showErrorsWarnings']); // Just trigger some native command
-      alert('La visualización de datos estará disponible en la Fase 2 (Soporte Adminer integrado).');
+      setViewMode('explorer');
     }
   };
 
@@ -203,6 +203,13 @@ export const HomeOverview: React.FC<OverviewProps> = ({
     <div className="dashboard-grid">
       {/* LEFT COLUMN: ACTIVE STATS & CONTROLS */}
       <div>
+        {viewMode === 'explorer' ? (
+          <DbExplorerTab
+            engineId={activeEngine.id}
+            onBack={() => setViewMode('diagnostics')}
+          />
+        ) : (
+          <>
         {/* Active Engine Card */}
         <div className="dashboard-panel hero-engine-card">
           <div className="hero-engine-info">
@@ -216,6 +223,21 @@ export const HomeOverview: React.FC<OverviewProps> = ({
             <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '4px 0 0 0' }}>
               Puerto mapeado: {activeConnection?.port || activeEngine.port}
             </p>
+            {isActive && (
+              <button 
+                className="btn primary text-xs" 
+                style={{ 
+                  background: 'var(--accent-purple)', 
+                  borderColor: 'var(--accent-purple)', 
+                  marginTop: '12px',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-sm)'
+                }}
+                onClick={() => setViewMode('explorer')}
+              >
+                🔍 Explorar y Administrar Datos
+              </button>
+            )}
           </div>
 
           <div className="hero-illustration">
@@ -350,6 +372,8 @@ export const HomeOverview: React.FC<OverviewProps> = ({
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* RIGHT COLUMN: SPECS, RESOURCES & TIPS */}

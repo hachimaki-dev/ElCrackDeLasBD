@@ -65,6 +65,11 @@ export declare class ContainerLifecycle extends EventEmitter {
      */
     getCurrentConnectionInfo(): ConnectionInfo | null;
     /**
+     * Actualiza la información de conexión activa en runtime (base de datos o usuario).
+     * Genera nuevamente el comando de conexión.
+     */
+    updateConnectionDetails(database?: string, user?: string, password?: string): void;
+    /**
      * Espera a que el healthcheck del motor pase.
      * Usa polling con el timeout definido por el motor.
      */
