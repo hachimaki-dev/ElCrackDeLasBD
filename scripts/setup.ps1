@@ -1,10 +1,10 @@
 # ==========================================================================
-# SQL Engine Laboratory — Setup y Verificación del Entorno para Windows
+# SQL Engine Laboratory - Setup y Verificacion del Entorno para Windows
 # ==========================================================================
 
 $ErrorActionPreference = "Stop"
 
-# Guardar la ubicación original
+# Guardar la ubicacion original
 $ORIGINAL_DIR = Get-Location
 
 # Resolver directorios del proyecto
@@ -14,32 +14,32 @@ $EXTENSION_DIR = Join-Path $PROJECT_ROOT "packages\extension"
 $WEBVIEW_DIR = Join-Path $PROJECT_ROOT "packages\webview-ui"
 
 Write-Host ""
-Write-Host "╔════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║  SQL Engine Laboratory — Setup & Check (Windows)║" -ForegroundColor Cyan
-Write-Host "╚════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "  SQL Engine Laboratory - Setup & Check (Windows) " -ForegroundColor Cyan
+Write-Host "==================================================" -ForegroundColor Cyan
 
 $issues = 0
 
 function Show-Pass($msg) {
-    Write-Host "  ✓ $msg" -ForegroundColor Green
+    Write-Host "  [OK] $msg" -ForegroundColor Green
 }
 
 function Show-Fail($msg) {
-    Write-Host "  ✗ $msg" -ForegroundColor Red
+    Write-Host "  [ERROR] $msg" -ForegroundColor Red
     global: $issues++
 }
 
 function Show-Warn($msg) {
-    Write-Host "  ⚠ $msg" -ForegroundColor Yellow
+    Write-Host "  [WARN] $msg" -ForegroundColor Yellow
 }
 
 function Show-Info($msg) {
-    Write-Host "  → $msg" -ForegroundColor DarkGray
+    Write-Host "  [INFO] $msg" -ForegroundColor DarkGray
 }
 
 function Show-Section($name) {
     Write-Host ""
-    Write-Host "▶ $name" -ForegroundColor Cyan
+    Write-Host ">>> $name" -ForegroundColor Cyan
     Write-Host "------------------------------------------------" -ForegroundColor DarkGray
 }
 
@@ -52,7 +52,7 @@ try {
     if ([int]$nodeMajor -ge 18) {
         Show-Pass "Node.js $nodeVer (>= 18 requerido)"
     } else {
-        Show-Fail "Node.js $nodeVer — se requiere v18+. Instalar desde https://nodejs.org"
+        Show-Fail "Node.js $nodeVer - se requiere v18+. Instalar desde https://nodejs.org"
     }
 } catch {
     Show-Fail "Node.js no encontrado. Instalar desde https://nodejs.org"
@@ -81,7 +81,7 @@ if (Test-Path (Join-Path $WEBVIEW_DIR "node_modules")) {
     }
 }
 
-Show-Section "Construcción de webview-ui"
+Show-Section "Construccion de webview-ui"
 try {
     Set-Location $WEBVIEW_DIR
     npm run build
@@ -90,7 +90,7 @@ try {
     Show-Fail "npm run build en webview-ui falló"
 }
 
-# ---- Dependencias de la Extensión ----
+# ---- Dependencias de la Extension ----
 Show-Section "Dependencias npm (packages/extension)"
 
 if (Test-Path (Join-Path $EXTENSION_DIR "node_modules")) {
@@ -106,13 +106,13 @@ if (Test-Path (Join-Path $EXTENSION_DIR "node_modules")) {
     }
 }
 
-Show-Section "Compilación TypeScript de la Extensión"
+Show-Section "Compilacion TypeScript de la Extension"
 try {
     Set-Location $EXTENSION_DIR
     npm run compile
-    Show-Pass "Extensión compilada correctamente"
+    Show-Pass "Extension compilada correctamente"
 } catch {
-    Show-Fail "TypeScript compilación falló"
+    Show-Fail "TypeScript compilacion fallo"
 }
 
 # ---- Docker ----
@@ -126,10 +126,10 @@ try {
         $engineVer = docker version --format '{{.Server.Version}}'
         Show-Pass "Docker Engine $engineVer (corriendo)"
     } catch {
-        Show-Fail "Docker no está corriendo — iniciar Docker Desktop"
+        Show-Fail "Docker no esta corriendo - iniciar Docker Desktop"
     }
 } catch {
-    Show-Fail "Docker no está instalado o no se encuentra en el PATH. Instala Docker Desktop: https://www.docker.com/products/docker-desktop/"
+    Show-Fail "Docker no esta instalado o no se encuentra en el PATH. Instala Docker Desktop: https://www.docker.com/products/docker-desktop/"
 }
 
 # ---- Estructura del repositorio ----
@@ -182,16 +182,16 @@ foreach ($file in $requiredFiles) {
 Write-Host ""
 Write-Host "===============================================" -ForegroundColor Cyan
 if ($issues -eq 0) {
-    Write-Host " ✅ Entorno listo — todos los checks pasaron" -ForegroundColor Green
+    Write-Host "  [OK] Entorno listo - todos los checks pasaron" -ForegroundColor Green
     Write-Host ""
     Write-Host " Próximos pasos:" -ForegroundColor Gray
     Write-Host "   npm run watch (dentro de packages/extension) para desarrollo"
     Write-Host "   F5 en VS Code para iniciar la extensión"
 } else {
-    Write-Host " ⚠ $issues problema(s) encontrado(s)" -ForegroundColor Red
+    Write-Host "  [WARN] $issues problema(s) encontrado(s)" -ForegroundColor Red
     Write-Host " Resolverlos antes de ejecutar la extensión." -ForegroundColor Gray
 }
 Write-Host "===============================================" -ForegroundColor Cyan
 
-# Volver a la ubicación original
+# Volver a la ubicacion original
 Set-Location $ORIGINAL_DIR

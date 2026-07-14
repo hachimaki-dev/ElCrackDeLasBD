@@ -2,13 +2,13 @@
 # SQL Engine Lab - Docker Image Builder for Windows
 # ==========================================================
 
-# 1. Copiar el contrato maestro desde la raíz del proyecto
+# 1. Copiar el contrato maestro desde la raiz del proyecto
 $CONTRACT_SRC = "..\..\lab-contract.json"
 $CONTRACT_DEST = "lab-contract.json"
 
 if (-not (Test-Path $CONTRACT_SRC)) {
-    Write-Error "ERROR: No se encontró $CONTRACT_SRC"
-    Write-Host "Asegúrate de estar en el directorio packages/docker-image"
+    Write-Error "ERROR: No se encontro $CONTRACT_SRC"
+    Write-Host "Asegurate de estar en el directorio packages/docker-image"
     Exit 1
 }
 
@@ -26,5 +26,5 @@ if (Test-Path $CONTRACT_DEST) {
 }
 
 Write-Host "=========================================================="
-Write-Host " ¡Build completado exitosamente!"
+Write-Host " Build completado exitosamente!"
 Write-Host "=========================================================="
